@@ -7,6 +7,15 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
     "ipykernel>=6.29.5",
+    "lumos",
     "mkdocs-material>=9.6.3",
     "pydantic>=2.10.6",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.1.0",
+]
+
+[tool.uv.sources]
+lumos = { git = "https://github.com/lumiralabs/lumos" }
