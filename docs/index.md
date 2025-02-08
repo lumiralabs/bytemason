@@ -2,8 +2,7 @@
 
 # Setup
 ```
-pip install git+https://github.com/lumiralabs/blueberry.git@main
-```
+pip install git+https://github.com/lumiralabs/blueberry
 
 Available Commands:
 
@@ -14,18 +13,22 @@ blueberry init <name> <description>
 
 creates a folder structure with:
 ```
-<name>
-    - frontend
-        - pages/...
-        - api/...
-        - package.json
-    - supabase
-        - migration files
+<name>/
+├── frontend/
+│   ├── pages/...
+│   ├── api/...
+│   └── package.json
+└── supabase/
+    └── migration files
 ```
 
 Examples:
 ```
 blueberry init todo_list_app "A todo list app"
+```
+
+
+```
 # ....
 # [clarify] asking user for more details
 # ....
