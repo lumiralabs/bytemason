@@ -2,7 +2,7 @@
 
 # Setup
 ```
-pip install https://github.com/lumiralabs/blueberry.git
+pip install git+https://github.com/lumiralabs/blueberry.git@main
 ```
 
 Available Commands:
