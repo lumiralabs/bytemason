@@ -29,4 +29,25 @@ This is the OpenAPI spec that is either implemented in the nextjs logic as `/api
 ```
 
 Here are more details:
-![Spec Generation Flow](/images/spec-jay.png)
+![Spec Generation Flow](images/spec-gen.png)
+```
+{
+    "/api/todos": {
+        "get": {
+            "description": "Get all todos",
+            "responses": {
+                "200": { "description": "OK" }
+            }
+        }
+    },
+    "/api/todos/{id}": {
+        "get": {
+            "description": "Get a todo by id",
+            "responses": {
+                "200": { "description": "OK" }
+            }
+        }
+    }
+}
+```
+
