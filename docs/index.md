@@ -51,4 +51,7 @@ blueberry init todo_list_app "A todo list app"
 [deployed] here's your deployment: https://todo-list-app.vercel.app
 ```
 
-    
+```
+Ambitious Examples:
+- a restaurant manangement and performance monitoring app, with a dashboard on the performance metrics, restaurant and a dashboard on the restaurant manager
+```
