@@ -1,7 +1,15 @@
 _experimental/
 _dev/
 
+## Backend
 .venv/
 *.egg-info
 __pycache__/
 site/
+
+
+## Frontend
+node_modules/
+.next/
+.env
+*.lockb
