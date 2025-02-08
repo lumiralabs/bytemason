@@ -6,9 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
-    "ipykernel>=6.29.5",
     "lumos",
-    "mkdocs-material>=9.6.3",
     "pydantic>=2.10.6",
 ]
 
@@ -16,6 +14,8 @@ dependencies = [
 dev = [
     "pre-commit>=4.1.0",
     "pytest>=8.3.4",
+    "mkdocs-material>=9.6.3",
+    "ipykernel>=6.29.5",
 ]
 
 [tool.uv.sources]
