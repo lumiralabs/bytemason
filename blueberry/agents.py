@@ -1,5 +1,5 @@
 from lumos import lumos
-from models import Intent
+from blueberry.models import Intent
 
 
 class MasterAgent:
