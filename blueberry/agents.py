@@ -1,5 +1,6 @@
 from lumos import lumos
 from blueberry.models import Intent
+import httpx
 
 
 class MasterAgent:
@@ -38,4 +39,49 @@ class MasterAgent:
         # frontend_spec = self.create_frontend_spec(intent)
         # backend_serving_spec = self.create_backend_serving_spec(intent)
         # supabase_spec = self.create_supabase_spec(intent)
+        pass
+
+
+class TestAgent:
+    def __init__(self, spec):
+        self.spec = spec
+
+    def backend_serving_test(self):
+        """
+        Hits each endpoint in the backend serving spec, and verifies everything works as expected
+        """
+
+        # create a test client
+        # hit each endpoint
+        # verify the response
+        # return the results
+        client = httpx.Client()
+        for endpoint in self.spec.endpoints:
+            response = client.get(endpoint)
+            assert response.status_code == 200
+            assert response.json() == {"message": "Hello, World!"}
+        pass
+
+
+# class Sandbox(BaseModel):
+#     filesystem: Any
+#     terminal: Any
+#     code_editor: Any
+
+
+#     def execute(self, code_input: str):
+#         """
+#         Executes the code commands in the terminal and returns the output
+#         """
+#         pass
+
+
+class RepairAgent:
+    def __init__(self, spec):
+        self.spec = spec
+
+    def repair(self, terminal_output: str, code_input: str):
+        """
+        Repairs the code based on the outputs of the terminal results
+        """
         pass
