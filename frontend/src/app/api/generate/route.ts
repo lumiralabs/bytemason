@@ -84,7 +84,7 @@ export async function POST(req: Request) {
       'package.json': {
         file: {
           contents: JSON.stringify({
-            name: spec.name.toLowerCase().replace(/\s+/g, '-'),
+            name: spec.project.name.toLowerCase().replace(/\s+/g, '-'),
             type: 'module',
             scripts: {
               dev: 'next dev',
@@ -174,7 +174,7 @@ import { ${generatedCode.components.map(c => c.name).join(', ')} } from '@/compo
 export default function Home() {
   return (
     <main className="min-h-screen p-8">
-      <h1 className="text-3xl font-bold mb-8">${spec.name}</h1>
+      <h1 className="text-3xl font-bold mb-8">${spec.project.name}</h1>
       ${generatedCode.components.map(c => `<${c.name} />`).join('\n      ')}
     </main>
   );

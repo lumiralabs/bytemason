@@ -20,6 +20,9 @@ interface Spec {
     };
   };
   features: string[];
+  project: {
+    name: string;
+  };
 }
 
 interface FileStructure {
@@ -48,7 +51,7 @@ type WebContainerFileSystem = {
 function SpecDisplay({ spec }: { spec: Spec }) {
   return (
     <div className="bg-black/50 backdrop-blur-xl p-8 rounded-xl border border-zinc-800 space-y-6 shadow-xl">
-      <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">{spec.name}</h2>
+      <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">{spec.project.name}</h2>
       <p className="text-zinc-400 leading-relaxed">{spec.description}</p>
       
       <div className="space-y-3">
