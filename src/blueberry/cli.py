@@ -179,15 +179,6 @@ def display_spec(spec: ProjectSpec):
         features_table.add_row(category, "\n".join([f"• {feature}" for feature in features]))
     console.print(Panel(features_table, title="Features", border_style="blue"))
     
-    # Dependencies
-    deps_table = Table(show_header=True)
-    deps_table.add_column("Type", style="cyan")
-    deps_table.add_column("Packages", style="white")
-    
-    deps_table.add_row("Production", "\n".join(spec.dependencies["required"]))
-    deps_table.add_row("Development", "\n".join(spec.dependencies["dev"]))
-    console.print(Panel(deps_table, title="Dependencies", border_style="magenta"))
-    
     # Environment Variables
     env_table = Table(show_header=True)
     env_table.add_column("Variable", style="cyan")

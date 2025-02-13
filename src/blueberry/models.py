@@ -95,7 +95,6 @@ class ProjectSpec(BaseModel):
     apiRoutes: Dict[str, ApiRouteGroup] = Field(description="API routes configuration")
     supabaseConfig: SupabaseConfig = Field(description="Supabase configuration")
     features: Dict[str, List[str]] = Field(description="Feature categories and their items")
-    dependencies: Dict[str, List[str]] = Field(description="Project dependencies")
     environmentVariables: Dict[str, str] = Field(description="Required environment variables")
     acceptanceCriteria: List[str] = Field(description="Acceptance criteria for the project")
 
