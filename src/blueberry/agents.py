@@ -6,6 +6,10 @@ from rich.prompt import Prompt, Confirm
 import json
 import os
 from openai import OpenAI
+from typing import Dict
+from pathlib import Path
+import shutil
+import subprocess
 
 
 class MasterAgent:
@@ -342,3 +346,180 @@ class RepairAgent:
         Repairs the code based on the outputs of the terminal results
         """
         pass
+
+
+class CodeGeneratorAgent:
+    def __init__(self, spec: ProjectSpec):
+        self.spec = spec
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        self.client = OpenAI()
+        self.console = Console()
+        self.project_dir = Path.cwd() / self.spec.project.name
+        self.boilerplate_path = Path(__file__).parent.parent.parent / "boilerplate"
+
+    def setup_project(self) -> None:
+        """Clone boilerplate and set up the new project directory"""
+        self.console.log(f'🚀 Creating new project: {self.spec.project.name}')
+        
+        try:
+            # Remove existing directory if it exists
+            if self.project_dir.exists():
+                shutil.rmtree(self.project_dir)
+            
+            # Copy boilerplate to new project directory
+            shutil.copytree(self.boilerplate_path, self.project_dir)
+            
+            # Update package.json with project name
+            package_json_path = self.project_dir / "package.json"
+            if package_json_path.exists():
+                with open(package_json_path, 'r') as f:
+                    package_data = json.load(f)
+                package_data["name"] = self.spec.project.name
+                with open(package_json_path, 'w') as f:
+                    json.dump(package_data, f, indent=2)
+                    
+            self.console.log('✅ Project directory created successfully')
+            
+        except Exception as e:
+            self.console.log('💥 Failed to set up project directory:', str(e))
+            raise
+
+    def write_files(self, files: Dict[str, str]) -> None:
+        """Write generated files to the project directory"""
+        self.console.log('📝 Writing generated files...')
+        
+        try:
+            for file_path, content in files.items():
+                full_path = self.project_dir / file_path
+                full_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                with open(full_path, 'w') as f:
+                    f.write(content)
+                    
+            self.console.log('✅ Files written successfully')
+            
+        except Exception as e:
+            self.console.log('💥 Failed to write files:', str(e))
+            raise
+
+    def install_dependencies(self) -> None:
+        """Install project dependencies"""
+        self.console.log('📦 Installing dependencies...')
+        
+        try:
+            subprocess.run(
+                ["npm", "install"],
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            self.console.log('✅ Dependencies installed successfully')
+            
+        except subprocess.CalledProcessError as e:
+            self.console.log('💥 Failed to install dependencies:', e.stderr)
+            raise
+
+    def generate_project(self) -> None:
+        """Complete project generation workflow"""
+        try:
+            # Step 1: Set up project directory
+            self.setup_project()
+            
+            # Step 2: Generate code files
+            self.console.log('🎨 Generating code files...')
+            files = self.generate_code()
+            
+            # Step 3: Write files
+            self.write_files(files)
+            
+            # Step 4: Install dependencies
+            self.install_dependencies()
+            
+            # Final success message
+            self.console.print(f"""
+[bold green]🎉 Project generated successfully![/bold green]
+
+Your project is ready at: {self.project_dir}
+
+To get started:
+1. cd {self.spec.project.name}
+2. npm run dev
+
+Happy coding! 🚀
+            """)
+            
+        except Exception as e:
+            self.console.print(f"[bold red]❌ Project generation failed: {str(e)}[/bold red]")
+            raise
+
+    def generate_code(self) -> Dict[str, str]:
+        """Generate code files based on the specification"""
+        self.console.log('🚀 [Code Generation] Processing specification...')
+        
+        try:
+            self.console.log('📡 [Code Generation] Making OpenAI API call...')
+            completion = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are an expert Next.js developer. Generate a JSON object containing all necessary code files for a Next.js application based on the provided specification.
+
+                        The response must be a valid JSON object where:
+                        - Keys are file paths
+                        - Values are the complete file contents
+                        
+                        Example JSON structure:
+                        {
+                            "app/page.tsx": "content of home page",
+                            "app/layout.tsx": "content of root layout",
+                            "components/ui/button.tsx": "content of button component",
+                            "lib/utils.ts": "content of utilities"
+                        }
+
+                        Guidelines:
+                        1. Use Next.js 14 App Router
+                        2. Include TypeScript types
+                        3. Use Tailwind CSS for styling
+                        4. Implement proper error handling
+                        5. Follow modern React patterns
+                        6. Include necessary comments
+                        7. Generate complete, working code
+                        8. Include proper imports
+                        
+                        Required files in JSON response:
+                        - app/page.tsx (home page)
+                        - app/layout.tsx (root layout)
+                        - app/api/[...routes]/route.ts (API routes)
+                        - components/ui/* (UI components)
+                        - lib/supabase.ts (Supabase client)
+                        - types/index.ts (TypeScript types)"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Generate a JSON object containing all code files for this specification: {json.dumps(self.spec.model_dump(), indent=2)}"
+                    }
+                ],
+                response_format={"type": "json_object"}
+            )
+            self.console.log('✅ [Code Generation] OpenAI API call successful')
+
+            message = completion.choices[0].message
+            if not message.content:
+                self.console.log('❌ [Code Generation] No valid response from OpenAI')
+                raise ValueError("Failed to generate code: Empty response from OpenAI")
+
+            try:
+                files = json.loads(message.content)
+                self.console.log('✨ [Code Generation] Parsed JSON response')
+                return files
+
+            except json.JSONDecodeError as e:
+                self.console.log('💥 [Code Generation] Failed to parse JSON response')
+                raise ValueError(f"Invalid JSON response from OpenAI: {str(e)}")
+
+        except Exception as e:
+            self.console.log('💥 [Code Generation] Error:', str(e))
+            raise

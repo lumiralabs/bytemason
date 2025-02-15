@@ -13,6 +13,22 @@
               "description": "API route handlers",
               "pattern": "Route handlers follow Next.js App Router conventions with route.ts files"
             },
+            "dashboard": {
+              "type": "directory",
+              "description": "Dashboard pages and components",
+              "contents": {
+                "layout.tsx": {
+                  "type": "file",
+                  "description": "Dashboard layout with authentication protection",
+                  "features": ["Protected routes", "Navigation layout", "User session handling"]
+                },
+                "page.tsx": {
+                  "type": "file",
+                  "description": "Main dashboard page",
+                  "features": ["User data display", "Dashboard widgets"]
+                }
+              }
+            },
             "signin": {
               "type": "directory",
               "description": "Authentication pages",

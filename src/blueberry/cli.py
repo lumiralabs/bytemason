@@ -6,7 +6,7 @@ from rich import print as rprint
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.table import Table
-from blueberry.agents import MasterAgent
+from blueberry.agents import MasterAgent, CodeGeneratorAgent
 from blueberry.models import ProjectSpec
 
 app = typer.Typer()
@@ -284,6 +284,29 @@ def main(
             with open(spec_file, 'w') as f:
                 f.write(spec.model_dump_json(indent=2))
             console.print(f"\n[green]Specification saved to {spec_file}[/green]")
+
+        # Step 5: Generate Code
+        if Confirm.ask("\nWould you like to generate the project code now?"):
+            try:
+                with console.status("[bold green]Generating project code...") as status:
+                    code_generator = CodeGeneratorAgent(spec)
+                    code_generator.generate_project()
+                    
+                console.print(f"""
+[bold green]🎉 Project generated successfully![/bold green]
+
+Your project is ready at: {code_generator.project_dir}
+
+To get started:
+1. cd {spec.project.name}
+2. npm run dev
+
+Happy coding! 🚀
+                """)
+                
+            except Exception as e:
+                console.print(f"\n[red]Error generating code: {str(e)}[/red]")
+                raise typer.Exit(1)
             
     except Exception as e:
         console.print(f"\n[red]Error generating specification: {str(e)}[/red]")

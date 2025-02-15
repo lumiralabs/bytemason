@@ -1,0 +1,175 @@
+{
+  "project": {
+    "name": "Simple To-Do Application",
+    "description": "A basic to-do application for users to manage their tasks efficiently.",
+    "techStack": [
+      "Next.js 14",
+      "Supabase",
+      "TypeScript",
+      "Tailwind CSS"
+    ]
+  },
+  "frontendStructure": {
+    "pages": {
+      "/": {
+        "type": "SSR",
+        "components": [
+          "Header",
+          "TaskList",
+          "TaskForm",
+          "Footer",
+          "FilterBar"
+        ],
+        "authRequired": true,
+        "authRedirect": null,
+        "dataFetching": [
+          "fetch user tasks"
+        ]
+      },
+      "/login": {
+        "type": "Static",
+        "components": [
+          "LoginForm"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      },
+      "/register": {
+        "type": "Static",
+        "components": [
+          "RegistrationForm"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      }
+    },
+    "components": {
+      "shared": [
+        "Button",
+        "Input",
+        "Modal",
+        "Loader"
+      ],
+      "feature": [
+        "TaskItem",
+        "TaskFilter",
+        "TaskSorter"
+      ]
+    }
+  },
+  "apiRoutes": {
+    "task": {
+      "/api/tasks": {
+        "method": "POST",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [
+          "title: required",
+          "dueDate: optional"
+        ],
+        "supabase": "supabase.from('tasks').insert(taskData)",
+        "body": null,
+        "response": null,
+        "pagination": null
+      },
+      "/api/tasks/:id": {
+        "method": "DELETE",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [
+          "id: required"
+        ],
+        "supabase": "supabase.from('tasks').delete().eq('id', id)",
+        "body": null,
+        "response": null,
+        "pagination": null
+      }
+    },
+    "auth": {
+      "/api/login": {
+        "method": "POST",
+        "middleware": [],
+        "validation": [
+          "email: required",
+          "password: required"
+        ],
+        "supabase": "supabase.auth.signIn({ email, password })",
+        "body": null,
+        "response": null,
+        "pagination": null
+      },
+      "/api/register": {
+        "method": "POST",
+        "middleware": [],
+        "validation": [
+          "email: required",
+          "password: required"
+        ],
+        "supabase": "supabase.auth.signUp({ email, password })",
+        "body": null,
+        "response": null,
+        "pagination": null
+      }
+    }
+  },
+  "supabaseConfig": {
+    "tables": {
+      "users": {
+        "columns": {
+          "id": "uuid",
+          "email": "text",
+          "password": "text"
+        },
+        "RLS": {
+          "policy": "user_id = auth.uid()"
+        }
+      },
+      "tasks": {
+        "columns": {
+          "id": "uuid",
+          "user_id": "uuid",
+          "title": "text",
+          "is_completed": "boolean",
+          "due_date": "timestamp"
+        },
+        "RLS": {
+          "policy": "user_id = auth.uid()"
+        }
+      }
+    },
+    "indexes": [
+      "CREATE INDEX ON tasks (user_id)",
+      "CREATE INDEX ON tasks (is_completed)"
+    ]
+  },
+  "features": {
+    "basic": [
+      "User registration and login",
+      "CRUD operations for to-do items (Create, Read, Update, Delete)",
+      "Ability to mark tasks as completed",
+      "Sorting and filtering tasks by status (active/completed)",
+      "Due date assignment for tasks",
+      "User-friendly UI with responsive design",
+      "Search functionality for tasks",
+      "Data persistence using Supabase"
+    ]
+  },
+  "environmentVariables": {
+    "SUPABASE_URL": "string",
+    "SUPABASE_ANON_KEY": "string"
+  },
+  "acceptanceCriteria": [
+    "Users can register and log in successfully.",
+    "Users can create, read, update, and delete tasks.",
+    "Users can mark tasks as completed.",
+    "Tasks can be sorted and filtered by their status.",
+    "Users can assign due dates to tasks.",
+    "All pages are responsive and user-friendly.",
+    "Users can search for tasks using a search bar.",
+    "Data persists through Supabase with real-time updates."
+  ]
+}

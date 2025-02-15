@@ -1,0 +1,158 @@
+{
+  "project": {
+    "name": "ToDo Application",
+    "description": "A Todo application allowing users to manage their tasks effectively, utilizing Next.js for the frontend and Supabase for the backend.",
+    "techStack": [
+      "Next.js 14",
+      "Supabase",
+      "TypeScript",
+      "Tailwind CSS",
+      "React Query",
+      "Zod"
+    ]
+  },
+  "frontendStructure": {
+    "pages": {
+      "/": {
+        "type": "SSR",
+        "components": [
+          "Header",
+          "TaskList",
+          "TaskFilters",
+          "Footer"
+        ],
+        "authRequired": true,
+        "authRedirect": null,
+        "dataFetching": [
+          "Get current user's tasks"
+        ]
+      },
+      "/login": {
+        "type": "Static",
+        "components": [
+          "LoginForm",
+          "Footer"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      },
+      "/register": {
+        "type": "Static",
+        "components": [
+          "RegistrationForm",
+          "Footer"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      },
+      "/tasks/[id]": {
+        "type": "SSR",
+        "components": [
+          "TaskDetail",
+          "Footer"
+        ],
+        "authRequired": true,
+        "authRedirect": null,
+        "dataFetching": [
+          "Get task by ID"
+        ]
+      }
+    },
+    "components": {
+      "shared": [
+        "Button",
+        "Input",
+        "Loader",
+        "Modal",
+        "ThemeSwitcher"
+      ],
+      "feature": [
+        "TaskCard",
+        "TaskForm",
+        "TaskFilter",
+        "Notification"
+      ]
+    }
+  },
+  "apiRoutes": {
+    "task": {
+      "/api/tasks": {
+        "method": "POST",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [
+          "title",
+          "description",
+          "category",
+          "due_date"
+        ],
+        "supabase": "insert into tasks (title, description, category, due_date, user_id) values ($1, $2, $3, $4, auth.user.id)",
+        "body": null,
+        "response": null,
+        "pagination": null
+      },
+      "/api/tasks/[id]": {
+        "method": "DELETE",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [],
+        "supabase": "delete from tasks where id = $1 and user_id = auth.user.id",
+        "body": null,
+        "response": null,
+        "pagination": null
+      }
+    }
+  },
+  "supabaseConfig": {
+    "tables": {
+      "tasks": {
+        "columns": {
+          "id": "uuid",
+          "title": "text",
+          "description": "text",
+          "category": "text",
+          "due_date": "timestamp",
+          "priority": "text",
+          "user_id": "uuid"
+        },
+        "RLS": {
+          "policy": "user_id = auth.uid()"
+        }
+      }
+    },
+    "indexes": [
+      "create index on tasks (user_id)",
+      "create index on tasks (due_date)"
+    ]
+  },
+  "features": {
+    "category": [
+      "User registration and login",
+      "CRUD functionality for tasks (Create, Read, Update, Delete)",
+      "Task categorization and tagging",
+      "Due date and reminder notifications",
+      "Search and filter options for tasks",
+      "Task prioritization (High, Medium, Low)",
+      "Real-time updates of task status",
+      "Dark and light mode theme options"
+    ]
+  },
+  "environmentVariables": {
+    "NEXT_PUBLIC_SUPABASE_URL": "string",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "string"
+  },
+  "acceptanceCriteria": [
+    "Users can register and log in successfully.",
+    "Users can create, read, update, and delete tasks.",
+    "Users can categorize and tag tasks.",
+    "Tasks can have due dates and reminders.",
+    "Users can search and filter tasks based on various criteria.",
+    "Tasks can be prioritized.",
+    "Real-time updates reflect changes in task status.",
+    "Users can switch between dark and light mode."
+  ]
+}
