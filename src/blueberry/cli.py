@@ -6,7 +6,7 @@ from rich import print as rprint
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.table import Table
-from blueberry.agents import MasterAgent, CodeGeneratorAgent
+from blueberry.agents import MasterAgent, CodeGeneratorAgent, SupabaseSetupAgent
 from blueberry.models import ProjectSpec
 
 app = typer.Typer()
@@ -239,6 +239,25 @@ def get_user_preferences() -> dict:
     
     return preferences
 
+def get_supabase_credentials() -> tuple:
+    """Get Supabase credentials from user"""
+    console.print("\n[bold blue]🔑 Please provide your Supabase credentials[/bold blue]")
+    
+    project_input = Prompt.ask(
+        "Project Reference ID or URL"
+    )
+    
+    anon_key = Prompt.ask(
+        "Anon/Public Key"
+    )
+    
+    service_key = Prompt.ask(
+        "Service Role Key",
+        password=True  # Hide the service key input
+    )
+    
+    return project_input, anon_key, service_key
+
 @app.command()
 def main(
     code: Optional[str] = typer.Option(None, "--code", help="The prompt to process")
@@ -284,6 +303,26 @@ def main(
             with open(spec_file, 'w') as f:
                 f.write(spec.model_dump_json(indent=2))
             console.print(f"\n[green]Specification saved to {spec_file}[/green]")
+
+        # Step 4: Setup Supabase
+        if Confirm.ask("\nWould you like to set up Supabase database now?"):
+            try:
+                # Get credentials first, then proceed with setup
+                project_ref, anon_key, service_key = get_supabase_credentials()
+                
+                with console.status("[bold green]Setting up Supabase...") as status:
+                    status.update("[bold green]Generating SQL migrations...")
+                    supabase_setup = SupabaseSetupAgent(spec)
+                    
+                    status.update("[bold green]Applying migrations to Supabase...")
+                    supabase_setup.apply_migration(project_ref, anon_key, service_key)
+                    
+                console.print("\n[bold green]✨ Supabase setup completed successfully![/bold green]")
+                
+            except Exception as e:
+                console.print(f"\n[red]Error setting up Supabase: {str(e)}[/red]")
+                if not Confirm.ask("Would you like to continue with code generation anyway?"):
+                    raise typer.Exit(1)
 
         # Step 5: Generate Code
         if Confirm.ask("\nWould you like to generate the project code now?"):

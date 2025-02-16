@@ -10,6 +10,7 @@ from typing import Dict
 from pathlib import Path
 import shutil
 import subprocess
+from datetime import datetime
 
 
 class MasterAgent:
@@ -190,7 +191,7 @@ Example Output: "Email and social authentication with JWT tokens and password re
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert full-stack developer specializing in Next.js and Supabase applications. Generate a detailed specification for a web application based on the user's prompt.
+                        "content": """You are an expert full-stack developer specializing in Next.js 14 app router and Supabase applications. Generate a detailed specification for a web application based on the user's prompt.
                         
                         The specification should follow this exact structure:
                         {
@@ -254,11 +255,11 @@ Example Output: "Email and social authentication with JWT tokens and password re
                         4. If intent.preferences exist, use them to customize the specification
                         
                         Guidelines:
-                        1. Always include authentication and authorization
+                        1. Always include supabase authentication and authorization
                         2. Use TypeScript and modern React patterns
                         3. Implement proper security measures
                         4. Consider performance optimizations
-                        5. Follow Next.js best practices for routing and data fetching
+                        5. Follow Next.js app router best practices for routing and data fetching
                         6. Include proper error handling
                         7. Add comprehensive validation
                         8. Consider real-time features where appropriate"""
@@ -357,6 +358,7 @@ class CodeGeneratorAgent:
         self.console = Console()
         self.project_dir = Path.cwd() / self.spec.project.name
         self.boilerplate_path = Path(__file__).parent.parent.parent / "boilerplate"
+        self.scaffold_path = self.boilerplate_path / "scaffold.json"
 
     def setup_project(self) -> None:
         """Clone boilerplate and set up the new project directory"""
@@ -421,20 +423,64 @@ class CodeGeneratorAgent:
             self.console.log('💥 Failed to install dependencies:', e.stderr)
             raise
 
+    def get_supabase_credentials(self) -> tuple:
+        """Get Supabase credentials from user"""
+        console = Console()
+        
+        console.print("\n[bold blue]🔑 Please provide your Supabase credentials[/bold blue]")
+        console.print("[dim]You can find these in Project Settings > API > Project API keys[/dim]\n")
+        
+        project_input = Prompt.ask(
+            "\nProject Reference ID or URL (e.g., https://xxx.supabase.co or project-id)"
+        )
+        
+        anon_key = Prompt.ask(
+            "\nAnon/Public Key"
+        )
+        
+        service_key = Prompt.ask(
+            "\nService Role Key",
+            password=True  # Hide the service key input
+        )
+        
+        return project_input, anon_key, service_key
+
     def generate_project(self) -> None:
         """Complete project generation workflow"""
         try:
             # Step 1: Set up project directory
             self.setup_project()
             
-            # Step 2: Generate code files
+            # Step 2: Ask for Supabase setup BEFORE generating files
+            supabase_credentials = None
+            if Confirm.ask("\nWould you like to set up Supabase database now?"):
+                try:
+                    project_ref, anon_key, service_key = self.get_supabase_credentials()
+                    supabase_credentials = (project_ref, anon_key, service_key)
+                except Exception as e:
+                    self.console.print(f"\n[red]Error getting Supabase credentials: {str(e)}[/red]")
+                    if not Confirm.ask("\nWould you like to continue with code generation anyway?"):
+                        raise
+            
+            # Step 3: Generate code files
             self.console.log('🎨 Generating code files...')
             files = self.generate_code()
             
-            # Step 3: Write files
+            # Step 4: Write files
             self.write_files(files)
             
-            # Step 4: Install dependencies
+            # Step 5: Apply Supabase migrations if we have credentials
+            if supabase_credentials:
+                try:
+                    project_ref, anon_key, service_key = supabase_credentials
+                    supabase_agent = SupabaseSetupAgent(self.spec)
+                    supabase_agent.apply_migration(project_ref, anon_key, service_key)
+                except Exception as e:
+                    self.console.print(f"\n[red]Error setting up Supabase: {str(e)}[/red]")
+                    if not Confirm.ask("\nWould you like to continue anyway?"):
+                        raise
+            
+            # Step 6: Install dependencies
             self.install_dependencies()
             
             # Final success message
@@ -465,19 +511,19 @@ Happy coding! 🚀
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert Next.js developer. Generate a JSON object containing all necessary code files for a Next.js application based on the provided specification.
+                        "content": f""" You are an expert Next.js developer. Generate a JSON object containing all necessary code files for a Next.js application based on the provided specification.
 
                         The response must be a valid JSON object where:
                         - Keys are file paths
                         - Values are the complete file contents
                         
                         Example JSON structure:
-                        {
+                        {{
                             "app/page.tsx": "content of home page",
                             "app/layout.tsx": "content of root layout",
                             "components/ui/button.tsx": "content of button component",
                             "lib/utils.ts": "content of utilities"
-                        }
+                        }}                        
 
                         Guidelines:
                         1. Use Next.js 14 App Router
@@ -492,10 +538,13 @@ Happy coding! 🚀
                         Required files in JSON response:
                         - app/page.tsx (home page)
                         - app/layout.tsx (root layout)
-                        - app/api/[...routes]/route.ts (API routes)
+                        - app/api/route.ts (API routes)
                         - components/ui/* (UI components)
-                        - lib/supabase.ts (Supabase client)
-                        - types/index.ts (TypeScript types)"""
+                        - libs/supabase.ts (Supabase client)
+                        - types/index.ts (TypeScript types)
+                        
+                        {json.dumps(self.scaffold_path.read_text(), indent=2)}
+                        """
                     },
                     {
                         "role": "user",
@@ -523,3 +572,114 @@ Happy coding! 🚀
         except Exception as e:
             self.console.log('💥 [Code Generation] Error:', str(e))
             raise
+
+
+class SupabaseSetupAgent:
+    def __init__(self, spec: ProjectSpec):
+        self.spec = spec
+        self.client = OpenAI()
+        self.console = Console()
+        
+    def get_migration_sql(self) -> str:
+        """Generate SQL migration based on the spec"""
+        try:
+            completion = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """Generate a complete pgsql migration for Supabase based on the specification.
+                        Include:
+                        1. Table creation with proper types and constraints
+                        2. Functions and triggers if any
+                        3. Indexes if any
+                        4. Initial seed data if needed
+                        
+                        Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, just code."""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Generate pgsql migration for: {json.dumps(self.spec.supabaseConfig.model_dump(), indent=2)}"
+                    }
+                ],
+                timeout=30
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            self.console.print(f"[red]Failed to generate SQL migration: {e}[/red]")
+            raise
+            
+    def apply_migration(self, project_ref: str, anon_key: str, service_key: str) -> None:
+        """Apply migration to Supabase project"""
+        try:
+            # Check for Supabase CLI
+            subprocess.run(["supabase", "--version"], check=True, capture_output=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            raise Exception("Supabase CLI not found. Please install it first: https://supabase.com/docs/guides/cli")
+
+        # Extract project ref from URL if needed
+        if "supabase.co" in project_ref:
+            try:
+                # Extract the project reference from URL
+                project_ref = project_ref.split("//")[1].split(".")[0]
+            except IndexError:
+                raise Exception("Invalid Supabase project URL format")
+
+        # Validate project ref format
+        if not project_ref.isalnum() or len(project_ref) != 20:
+            raise Exception("Invalid project ref format. Must be a 20-character alphanumeric string.")
+
+        migration_sql = self.get_migration_sql()
+        migrations_dir = Path.cwd() / self.spec.project.name / "supabase" / "migrations"
+        migrations_dir.mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        migration_file = migrations_dir / f"{timestamp}_initial_setup.sql"
+        migration_file.write_text(migration_sql)
+
+        try:
+            # Initialize Supabase project if not already initialized
+            if not (migrations_dir.parent / "config.toml").exists():
+                self.console.print("[yellow]Initializing Supabase project...[/yellow]")
+                subprocess.run(
+                    ["supabase", "init"],
+                    cwd=migrations_dir.parent.parent,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+            # Link the project
+            self.console.print(f"[yellow]Linking to Supabase project: {project_ref}[/yellow]")
+            subprocess.run(
+                [
+                    "supabase", "link", 
+                    "--project-ref", project_ref,
+                    "--password", service_key
+                ],
+                cwd=migrations_dir.parent.parent,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            # Push the migration
+            self.console.print("[yellow]Pushing migration...[/yellow]")
+            subprocess.run(
+                ["supabase", "db", "push"],
+                cwd=migrations_dir.parent.parent,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            self.console.print("[green]✅ Migration applied successfully[/green]")
+            
+        except subprocess.TimeoutExpired:
+            raise Exception("Operation timed out while applying migration")
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else str(e)
+            raise Exception(f"Migration failed: {error_msg}")

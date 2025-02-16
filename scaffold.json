@@ -65,7 +65,7 @@
             "LayoutClient.tsx": {
               "type": "file",
               "description": "Client-side layout component",
-              "features": ["Navigation", "User menu", "Responsive design"]
+              "features": ["Navigation", "Color Theme", "Responsive design"]
             },
             "ui": {
               "type": "directory",
@@ -99,13 +99,21 @@
                 "generateMetadata": "Metadata generation utility"
               }
             },
+            "api.tsx": {
+              "type": "file",
+              "description": "fetch api wrapper",
+              "exports": {
+                "fetchData": "Generic data fetching with error handling",
+                "handleResponse": "Response parsing and error handling"
+              }
+            },
             "supabase": {
               "type": "directory",
               "description": "Supabase client and server utilities",
               "contents": {
                 "middleware.ts": {
                   "type": "file",
-                  "description": "Supabase middleware for session handling",
+                  "description": "Supabase client, server and middleware for session handling",
                   "exports": {
                     "updateSession": {
                       "type": "function",
@@ -113,27 +121,6 @@
                       "usage": "Called by root middleware for auth state management",
                       "implementation": "Cookie-based session refresh with error handling"
                     }
-                  }
-                },
-                "server.ts": {
-                  "type": "file",
-                  "description": "Server-side Supabase client configuration",
-                  "exports": {
-                    "createClient": {
-                      "type": "function",
-                      "description": "Creates a server-side Supabase client with cookie handling",
-                      "usage": "Used for server-side authentication and database operations",
-                      "implementation": "Server-side cookie management with error handling"
-                    }
-                  }
-                },
-                "client.ts": {
-                  "type": "file",
-                  "description": "Client-side Supabase configuration",
-                  "exports": {
-                    "supabase": "Singleton Supabase client instance",
-                    "signIn": "Sign in function with provider support",
-                    "signOut": "Sign out with redirect"
                   }
                 }
               }
@@ -238,8 +225,7 @@
       },
       "database": {
         "supabase": "^2.0.0",
-        "@supabase/ssr": "latest",
-        "@supabase/auth-helpers-nextjs": "latest"
+        "@supabase/ssr": "latest"
       },
       "styling": {
         "tailwindcss": "^3.0.0",
@@ -265,19 +251,9 @@
         "name": "Authentication",
         "description": "Full authentication system with Supabase",
         "capabilities": [
-          "Email/Password login",
           "OAuth providers",
           "Session management",
           "Protected routes"
-        ]
-      },
-      {
-        "name": "Dashboard",
-        "description": "User dashboard with protected routes",
-        "capabilities": [
-          "User profile",
-          "Settings management",
-          "Data visualization"
         ]
       },
       {
