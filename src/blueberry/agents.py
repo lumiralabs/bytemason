@@ -6,68 +6,37 @@ from rich.prompt import Prompt, Confirm
 import json
 import os
 from openai import OpenAI
-from langchain_openai import ChatOpenAI
 from codegen import Codebase
 from codegen.extensions.langchain.agent import create_codebase_agent
-from codegen.extensions.langchain.tools import (
-    ViewFileTool,
-    ListDirectoryTool,
-    SearchTool,
-    EditFileTool,
-    CreateFileTool,
-    DeleteFileTool,
-    RenameFileTool,
-    MoveSymbolTool,
-    RevealSymbolTool,
-    SemanticEditTool,
-    CommitTool
-)
-from pathlib import Path
-import shutil
-
 
 class MasterAgent:
     def __init__(self):
-        pass
+        self.client = OpenAI()
 
     def understand_intent(self, user_input: str) -> Intent:
-        """
-        Understand the user's intent from the user's input, and returns a more detailed intent with features, components, etc.
-        """
-        system_prompt = """Analyze user requests for Next.js + Supabase applications and break them down into core features.
-
-        Focus on:
-        1. Core functionality and key features
-        2. Required auth/security features
-        3. Essential data models
-        4. Critical API endpoints
-
-        Format features as specific, actionable items like:
-        - "Email and social authentication"
-        - "Real-time chat messaging"
-        - "File upload with image optimization"
-
-        Consider security, performance, and user experience in your analysis."""
-        
-        intent = lumos.call_ai(
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {"role": "user", "content": user_input},
-            ],
-            response_format=Intent,
-            model="gpt-4o-mini",
-        )
-        
-        # Ensure we have a name and description
-        if not intent.name:
-            intent.name = user_input.strip().lower().replace(" ", "-")
-        if not intent.description:
-            intent.description = f"A Next.js application that {user_input}"
+        """Understand the user's intent from the user's input."""
+        try:
+            completion = self.client.beta.chat.completions.parse(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """Analyze user requests for Next.js + Supabase applications and extract core features.
+                        Focus on:
+                        1. Core functionality and key features
+                        2. Required auth/security features
+                        3. Essential data models
+                        4. Critical API endpoints"""
+                    },
+                    {"role": "user", "content": user_input}
+                ],
+                response_format=Intent
+            )
             
-        return intent
+            return completion.choices[0].message.parsed
+            
+        except Exception as e:
+            raise ValueError(f"Failed to understand intent: {str(e)}")
 
     def validate_feature(self, feature: str) -> str:
         """Validate and enhance a single feature.
@@ -181,140 +150,34 @@ Example Output: "Email and social authentication with JWT tokens and password re
         return intent
 
     def create_spec(self, intent: Intent) -> ProjectSpec:
-        """Create a detailed project specification based on the intent and preferences.
-        
-        Args:
-            intent: The intent object containing project requirements and preferences.
-            
-        Returns:
-            ProjectSpec: A detailed project specification ready for implementation.
-        """
-        if not os.getenv("OPENAI_API_KEY"):
-            raise ValueError("OPENAI_API_KEY environment variable is required")
-            
-        client = OpenAI()
-        console = Console()
-        
-        console.log('🚀 [Spec Generation] Processing intent:', intent.model_dump_json())
-        
+        """Create a detailed project specification based on the intent."""
         try:
-            console.log('📡 [Spec Generation] Making OpenAI API call...')
-            completion = client.chat.completions.create(
-                model="gpt-4o-mini",
+            intent = lumos.call_ai(
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert full-stack developer specializing in Next.js and Supabase applications. Generate a detailed specification for a web application based on the user's prompt.
+                        "content": """Generate a detailed specification for a Next.js + Supabase application.
+                        Include:
+                        1. React components with clear purposes
+                        2. API routes with methods and auth requirements
+                        3. Database tables with columns and relationships
+                        4. Required environment variables
                         
-                        The specification should follow this exact structure:
-                        {
-                          "project": {
-                            "name": "string - use the intent name",
-                            "description": "string - use the intent description",
-                            "techStack": ["Next.js 14", "Supabase", "TypeScript", "Tailwind CSS", ...]
-                          },
-                          "frontendStructure": {
-                            "pages": {
-                              "/path": {
-                                "type": "SSR|Static|SSG",
-                                "components": ["array of components"],
-                                "authRequired": boolean,
-                                "dataFetching": ["data to fetch"]
-                              }
-                            },
-                            "components": {
-                              "shared": ["reusable components"],
-                              "feature": ["feature-specific components"]
-                            }
-                          },
-                          "apiRoutes": {
-                            "group": {
-                              "/api/path": {
-                                "method": "HTTP method",
-                                "middleware": ["auth checks"],
-                                "supabase": "supabase query",
-                                "validation": ["required fields"]
-                              }
-                            }
-                          },
-                          "supabaseConfig": {
-                            "tables": {
-                              "tableName": {
-                                "columns": {"column": "type"},
-                                "RLS": {"policy": "condition"}
-                              }
-                            },
-                            "indexes": ["SQL index statements"]
-                          },
-                          "features": {
-                            "category": ["feature list - use intent features"]
-                          },
-                          "dependencies": {
-                            "required": ["prod dependencies"],
-                            "dev": ["dev dependencies"]
-                          },
-                          "environmentVariables": {
-                            "VAR_NAME": "type"
-                          },
-                          "acceptanceCriteria": [
-                            "list of criteria"
-                          ]
-                        }
-
-                        Important:
-                        1. Use the intent.name for project.name
-                        2. Use the intent.description for project.description
-                        3. Use the intent.features to populate the features section
-                        4. If intent.preferences exist, use them to customize the specification
-                        
-                        Guidelines:
-                        1. Always include authentication and authorization
-                        2. Use TypeScript and modern React patterns
-                        3. Implement proper security measures
-                        4. Consider performance optimizations
-                        5. Follow Next.js best practices for routing and data fetching
-                        6. Include proper error handling
-                        7. Add comprehensive validation
-                        8. Consider real-time features where appropriate"""
+                        Keep the specification focused and practical."""
                     },
                     {
                         "role": "user",
-                        "content": f"Generate a JSON specification for the following app: {json.dumps(intent.model_dump(), indent=2)}"
+                        "content": f"Generate specification for: {json.dumps(intent.model_dump(), indent=2)}"
                     }
                 ],
-                response_format={"type": "json_object"}
+                response_format=ProjectSpec,
+                model="gpt-4o",
             )
-            console.log('✅ [Spec Generation] OpenAI API call successful')
-
-            message = completion.choices[0].message
-            if not message.content:
-                console.log('❌ [Spec Generation] No valid response from OpenAI')
-                raise ValueError("Failed to generate specification: Empty response from OpenAI")
-
-            try:
-                spec_dict = json.loads(message.content)
-                console.log('✨ [Spec Generation] Parsed JSON response')
-                
-                # Ensure project name and description are set from intent
-                if "project" not in spec_dict:
-                    spec_dict["project"] = {}
-                spec_dict["project"]["name"] = intent.name
-                spec_dict["project"]["description"] = intent.description
-                
-                spec = ProjectSpec.model_validate(spec_dict)
-                console.log('🎉 [Spec Generation] Validated specification schema')
-                return spec
-                
-            except json.JSONDecodeError as e:
-                console.log('💥 [Spec Generation] Failed to parse JSON response')
-                raise ValueError(f"Invalid JSON response from OpenAI: {str(e)}")
-            except Exception as e:
-                console.log('💥 [Spec Generation] Failed to validate specification')
-                raise ValueError(f"Invalid specification format: {str(e)}")
+            
+            return intent
             
         except Exception as e:
-            console.log('💥 [Spec Generation] Error:', str(e))
-            raise
+            raise ValueError(f"Failed to create specification: {str(e)}")
 
 
 class TestAgent:
@@ -366,458 +229,136 @@ class CodeAgent:
     def __init__(self, project_path: str, spec: ProjectSpec):
         self.console = Console()
         self.spec = spec
-        
-        # Convert to absolute path and ensure it exists
         self.project_path = os.path.abspath(project_path)
-        Path(self.project_path).mkdir(parents=True, exist_ok=True)
-            
-        # Store original directory
-        self.original_dir = os.getcwd()
-            
-        # Initialize git repository if needed
-        git_path = os.path.join(self.project_path, '.git')
-        if not os.path.exists(git_path):
-            self.console.print("[yellow]Initializing git repository...[/yellow]")
-            os.chdir(self.project_path)
-            os.system('git init')
-            
-            # Create .gitignore if it doesn't exist
-            gitignore_path = os.path.join(self.project_path, '.gitignore')
-            if not os.path.exists(gitignore_path):
-                with open(gitignore_path, 'w') as f:
-                    f.write("node_modules/\n.next/\n.env\n.env.local\n*.log\n.DS_Store\n")
-            
-            # Initial commit to establish the repository
-            os.system('git add .')
-            os.system('git commit -m "Initial commit" --allow-empty')
-            
-        # Change back to original directory
-        os.chdir(self.original_dir)
         
-        # Initialize codebase with the project directory
         try:
             self.codebase = Codebase(self.project_path)
-     
-                
-        except Exception as e:
-            self.console.print(f"[red]Error initializing codebase: {str(e)}[/red]")
-            raise ValueError(f"Failed to initialize codebase at {self.project_path}: {str(e)}")
-        
-        # Create tools with proper error handling
-        try:
-            self.tools = [
-                ViewFileTool(self.codebase),
-                ListDirectoryTool(self.codebase),
-                SearchTool(self.codebase),
-                EditFileTool(self.codebase),
-                CreateFileTool(self.codebase),
-                DeleteFileTool(self.codebase),
-                RenameFileTool(self.codebase),
-                MoveSymbolTool(self.codebase),
-                RevealSymbolTool(self.codebase),
-                SemanticEditTool(self.codebase),
-                CommitTool(self.codebase)
-            ]
-        except Exception as e:
-            self.console.print(f"[red]Error creating tools: {str(e)}[/red]")
-            raise ValueError(f"Failed to create tools: {str(e)}")
-        
-        # Create the agent with proper error handling
-        try:
             self.agent = create_codebase_agent(
                 codebase=self.codebase,
                 model_name="gpt-4o",
                 temperature=0,
-                verbose=True,
+                verbose=True
             )
+            self.console.print(f"[green]Successfully initialized CodeAgent at: {self.project_path}[/green]")
         except Exception as e:
-            self.console.print(f"[red]Error creating agent: {str(e)}[/red]")
-            raise ValueError(f"Failed to create agent: {str(e)}")
-            
-        # Create session config
-        self.session_config = {
-            "configurable": {
-                "session_id": self.spec.project.name
-            }
-        }
-        
-        # Log successful initialization
-        self.console.print(f"[green]Successfully initialized CodeAgent with project at: {self.project_path}[/green]")
-        
-    def __enter__(self):
-        """Context manager entry to handle directory changes."""
-        os.chdir(self.project_path)
-        return self
-        
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit to restore original directory."""
-        os.chdir(self.original_dir)
-        
-    def _serialize_for_json(self, obj):
-        """Helper method to serialize objects for JSON."""
-        if hasattr(obj, 'model_dump'):
-            return obj.model_dump()
-        elif hasattr(obj, '__dict__'):
-            return obj.__dict__
-        else:
-            return str(obj)
-            
-    def _remove_path(self, path: str):
-        """Helper method to remove both files and directories safely.
-        
-        Args:
-            path: Path to file or directory to remove
-        """
-        try:
-            full_path = os.path.join(self.project_path, path)
-            if os.path.exists(full_path):
-                if os.path.isdir(full_path):
-                    shutil.rmtree(full_path)
-                    self.console.print(f"[green]Removed directory: {path}[/green]")
-                else:
-                    os.remove(full_path)
-                    self.console.print(f"[green]Removed file: {path}[/green]")
-        except Exception as e:
-            self.console.print(f"[yellow]Warning: Failed to remove {path}: {str(e)}[/yellow]")
+            self.console.print(f"[red]Error initializing CodeAgent: {str(e)}[/red]")
+            raise
 
-    async def transform_template(self):
-        """Transform the template into the final application based on spec."""
-        steps = {
-            "Cleaning up template": self._cleanup_template,
-            "Setting up database": self._setup_database,
-            "Configuring authentication": self._setup_auth,
-            "Creating API routes": self._create_api_routes,
-            "Generating components": self._create_components,
-            "Creating pages": self._create_pages,
-            "Setting up styles": self._setup_styles,
-            "Configuring environment": self._configure_environment
-        }
-        
-        for description, step_func in steps.items():
-            with self.console.status(f"[bold green]{description}..."):
-                try:
-                    # Use context manager to handle directory changes
-                    with self:
-                        await step_func()
-                except Exception as e:
-                    self.console.print(f"[red]Error in {step_func.__name__}: {str(e)}[/red]")
-                    raise
-                    
-    async def _cleanup_template(self):
-        """Remove tutorial and example files."""
+    def analyze_codebase(self):
+        """Analyze the current codebase structure and understand its components."""
         try:
-            # Common tutorial and example paths to clean up
-            paths_to_clean = [
-                "components/tutorial",
-                "components/examples",
-                "app/examples",
-                "pages/examples",
-                "styles/tutorial.css",
-                "public/tutorial",
-                "docs/tutorial",
-                "test/examples"
-            ]
-            
-            # Clean up known tutorial paths
-            for path in paths_to_clean:
-                self._remove_path(path)
-            
-            # Use agent to identify and clean up additional tutorial content
-            result = self.agent.invoke(
+            analysis_result = self.agent.invoke(
                 {
-                    "input": """Analyze the codebase and identify any remaining tutorial or example files.
-                    Look for:
-                    1. Files with 'example', 'demo', or 'tutorial' in their names
-                    2. Components that are purely for demonstration
-                    3. Routes that are part of the tutorial
-                    4. Test files for example components
-                    
-                    Return the paths of files to be removed."""
+                    "input": """Analyze the current Next.js codebase and provide:
+                    1. Current app router structure and pages
+                    2. Existing components and their purposes
+                    3. API routes and their functionality
+                    4. Data models and database integration
+                    5. Authentication setup if any
+                    6. Utility functions and their usage"""
                 },
-                config=self.session_config
+                config={"configurable": {"session_id": "analyze_codebase"}}
+
             )
             
-            if isinstance(result, str):
-                # Parse the agent's response for file paths
-                for line in result.splitlines():
-                    line = line.strip()
-                    if line and not line.startswith('#') and not line.startswith('//'):
-                        self._remove_path(line)
-            
-            # Clean up layout.tsx if it exists
-            layout_path = "app/layout.tsx"
-            if os.path.exists(os.path.join(self.project_path, layout_path)):
-                try:
-                    # Use agent to clean up layout.tsx
-                    self.agent.invoke(
-                        {
-                            "input": f"""Clean up the layout.tsx file:
-                            1. Remove tutorial-related imports
-                            2. Remove example components
-                            3. Remove demo content
-                            4. Keep only essential layout structure
-                            5. Update the file at {layout_path}"""
-                        },
-                        config=self.session_config
-                    )
-                except Exception as e:
-                    self.console.print(f"[yellow]Warning: Failed to clean up layout.tsx: {str(e)}[/yellow]")
-            
-            self.console.print("[green]✓ Cleaned up template files[/green]")
+            self.console.print("[green]✓ Codebase analysis complete[/green]")
+            return analysis_result
             
         except Exception as e:
-            self.console.print(f"[red]Error cleaning up template: {str(e)}[/red]")
+            self.console.print(f"[red]Error analyzing codebase: {str(e)}[/red]")
             raise
-        
-    async def _setup_database(self):
-        """Set up Supabase database schema."""
+
+    def implement_features(self):
+        """Implement features according to the project specification."""
         try:
-            # Create migrations directory
-            migrations_dir = "supabase/migrations"
+            # First analyze the codebase
+            self.analyze_codebase()
             
-            # Use agent to set up database schema
-            result = self.agent.invoke(
+            # Create components
+            for component in self.spec.structure.components:
+                component_result = self.agent.invoke(
+                    {
+                        "input": f"""Create component {component.name} with:
+                        1. TypeScript types and interfaces
+                        2. React hooks and state management
+                        3. API integration
+                        4. Error handling and loading states
+                        5. Proper styling with Tailwind CSS
+                        
+                        Component details:
+                        {json.dumps(component.model_dump(), indent=2)}"""
+                    },
+                    config={"configurable": {"session_id": f"create_component_{component.name}"}}
+                )
+            
+            # Create API routes
+            for route in self.spec.structure.api_routes:
+                route_result = self.agent.invoke(
+                    {
+                        "input": f"""Create API route {route.path} with:
+                        1. Request validation with Zod
+                        2. Authentication middleware
+                        3. Database integration
+                        4. Error handling
+                        5. TypeScript types
+                        
+                        Route details:
+                        {json.dumps(route.model_dump(), indent=2)}"""
+                    },
+                    config={"configurable": {"session_id": f"create_route_{route.path}"}}
+                )
+            
+            # Set up database models
+            for table in self.spec.structure.database:
+                db_result = self.agent.invoke(
+                    {
+                        "input": f"""Set up database table {table.name} with:
+                        1. Table definition
+                        2. Relationships and foreign keys
+                        3. Indexes for performance
+                        4. Row Level Security policies
+                        
+                        Table details:
+                        {json.dumps(table.model_dump(), indent=2)}"""
+                    },
+                    config={"configurable": {"session_id": f"create_table_{table.name}"}}
+                )
+            
+            # Integrate components
+            integration_result = self.agent.invoke(
                 {
-                    "input": f"""Create a Supabase database schema with the following configuration:
-                    {json.dumps(self.spec.supabaseConfig.model_dump(), indent=2)}
-                    
-                    Requirements:
-                    1. Create a migration file at {migrations_dir}/00000000000000_initial.sql
-                    2. Use Supabase SQL syntax
-                    3. Include RLS policies
-                    4. Add appropriate indexes
-                    5. Add timestamps and primary keys
-                    6. Set up foreign key relationships
-                    7. Enable RLS on all tables"""
+                    "input": """Integrate all components by:
+                    1. Setting up proper routing
+                    2. Adding navigation
+                    3. Implementing layouts
+                    4. Setting up state management
+                    5. Adding error boundaries"""
                 },
-                config=self.session_config
+                config={"configurable": {"session_id": "integrate_components"}}
             )
             
-            if result:
-                self.console.print("[green]✓ Generated database schema[/green]")
-            else:
-                raise Exception("Failed to generate database schema")
+            self.console.print("[green]✓ Features implemented successfully[/green]")
+            return "Features implemented successfully"
+            
         except Exception as e:
-            self.console.print(f"[red]Error setting up database: {str(e)}[/red]")
+            self.console.print(f"[red]Error implementing features: {str(e)}[/red]")
             raise
-        
-    async def _setup_auth(self):
-        """Configure authentication."""
+
+    def transform_template(self):
+        """Transform the template into the final application based on spec.
+        This is the main entry point that coordinates the analysis and implementation."""
         try:
-            # Use agent to set up authentication
-            result = self.agent.invoke(
-                {
-                    "input": f"""Set up Next.js authentication with Supabase.
-                    
-                    Create and configure the following files:
-                    1. app/lib/auth.ts - Server-side auth utilities
-                    2. middleware.ts - Auth middleware
-                    3. app/lib/client.ts - Client-side auth utilities
-                    
-                    Requirements:
-                    1. Use Next.js App Router
-                    2. Implement server-side auth with cookies
-                    3. Add client-side auth utilities
-                    4. Handle session refresh
-                    5. Add middleware for protected routes
-                    6. Support the following auth methods: {self.spec.project.techStack}
-                    7. Add proper TypeScript types
-                    8. Add proper error handling
-                    9. Add proper documentation"""
-                },
-                config=self.session_config
-            )
+            # First analyze the codebase
+            analysis = self.analyze_codebase()
+            self.console.print("\n[bold]Codebase Analysis:[/bold]")
+            self.console.print(analysis)
+
+            # Then implement the features
+            result = self.implement_features()
             
-            if result:
-                self.console.print("[green]✓ Set up authentication[/green]")
-            else:
-                raise Exception("Failed to set up authentication")
+            self.console.print("\n[green]✓ Template transformation complete[/green]")
+            return result
+            
         except Exception as e:
-            self.console.print(f"[red]Error setting up authentication: {str(e)}[/red]")
-            raise
-        
-    async def _create_api_routes(self):
-        """Generate API routes."""
-        try:
-            # Use agent to create API routes
-            result = self.agent.invoke(
-                {
-                    "input": f"""Create Next.js API routes with the following configuration:
-                    {json.dumps(self.spec.apiRoutes, indent=2)}
-                    
-                    Requirements:
-                    1. Create route handlers in the app directory following Next.js App Router conventions
-                    2. Implement proper error handling
-                    3. Add request validation
-                    4. Include authentication middleware where required
-                    5. Use Supabase client for database operations
-                    6. Add proper TypeScript types
-                    7. Follow REST best practices
-                    8. Add rate limiting where appropriate
-                    9. Include API documentation comments
-                    10. Add proper testing setup"""
-                },
-                config=self.session_config
-            )
-            
-            if result:
-                self.console.print("[green]✓ Created API routes[/green]")
-            else:
-                raise Exception("Failed to create API routes")
-        except Exception as e:
-            self.console.print(f"[red]Error creating API routes: {str(e)}[/red]")
-            raise
-                
-    async def _create_components(self):
-        """Generate React components."""
-        try:
-            # Use agent to create components
-            result = self.agent.invoke(
-                {
-                    "input": f"""Create React components with the following configuration:
-                    {json.dumps(self.spec.frontendStructure.components, indent=2)}
-                    
-                    Requirements:
-                    1. Create components in the components directory organized by category
-                    2. Use React Server Components where appropriate
-                    3. Implement proper TypeScript types
-                    4. Use Tailwind CSS for styling
-                    5. Add proper error boundaries
-                    6. Include loading states
-                    7. Add proper accessibility attributes
-                    8. Use modern React patterns (hooks, context, etc.)
-                    9. Add proper documentation and comments
-                    10. Include unit tests
-                    11. Use shadcn/ui components where applicable
-                    12. Add storybook stories for each component"""
-                },
-                config=self.session_config
-            )
-            
-            if result:
-                self.console.print("[green]✓ Created React components[/green]")
-            else:
-                raise Exception("Failed to create components")
-        except Exception as e:
-            self.console.print(f"[red]Error creating components: {str(e)}[/red]")
-            raise
-                
-    async def _create_pages(self):
-        """Generate Next.js pages."""
-        try:
-            # Use agent to create pages
-            result = self.agent.invoke(
-                {
-                    "input": f"""Create Next.js pages with the following configuration:
-                    {json.dumps(self.spec.frontendStructure.pages, indent=2)}
-                    
-                    Requirements:
-                    1. Create pages in the app directory following Next.js App Router conventions
-                    2. Add loading.tsx and error.tsx for each page with data fetching
-                    3. Implement proper data fetching using Supabase
-                    4. Add loading and error states
-                    5. Use proper TypeScript types
-                    6. Implement proper SEO metadata
-                    7. Add proper accessibility
-                    8. Use layout components where appropriate
-                    9. Implement proper client-side interactions
-                    10. Add proper documentation
-                    11. Use proper routing patterns
-                    12. Handle authentication requirements
-                    13. Implement proper data mutations
-                    14. Add proper testing setup"""
-                },
-                config=self.session_config
-            )
-            
-            if result:
-                self.console.print("[green]✓ Created Next.js pages[/green]")
-            else:
-                raise Exception("Failed to create pages")
-        except Exception as e:
-            self.console.print(f"[red]Error creating pages: {str(e)}[/red]")
-            raise
-            
-    async def _setup_styles(self):
-        """Set up styling configuration."""
-        try:
-            # Use agent to set up styles
-            result = self.agent.invoke(
-                {
-                    "input": f"""Set up styling configuration for the Next.js app.
-                    
-                    Create and configure the following files:
-                    1. tailwind.config.js - Tailwind configuration
-                    2. app/globals.css - Global styles
-                    3. components/ui/theme.ts - Theme configuration
-                    
-                    Requirements:
-                    1. Configure Tailwind CSS with:
-                       - Dark mode support
-                       - Custom color scheme
-                       - Typography plugin
-                       - Forms plugin
-                       - Animations
-                    2. Set up global styles with:
-                       - CSS reset
-                       - Custom variables
-                       - Utility classes
-                       - Component styles
-                    3. Configure theme based on: {self.spec.project.techStack}
-                    4. Add shadcn/ui configuration
-                    5. Set up responsive design utilities
-                    6. Add custom animations
-                    7. Add proper TypeScript types for theme
-                    8. Add color scheme configuration
-                    9. Set up CSS variables for theming"""
-                },
-                config=self.session_config
-            )
-            
-            if result:
-                self.console.print("[green]✓ Set up styling configuration[/green]")
-            else:
-                raise Exception("Failed to set up styles")
-        except Exception as e:
-            self.console.print(f"[red]Error setting up styles: {str(e)}[/red]")
-            raise
-            
-    async def _configure_environment(self):
-        """Set up environment variables."""
-        try:
-            # Use agent to configure environment
-            result = self.agent.invoke(
-                {
-                    "input": f"""Set up environment configuration for the Next.js app.
-                    
-                    Create and configure the following files:
-                    1. .env.local.example - Example environment variables
-                    2. .env.development - Development environment variables
-                    3. .env.test - Test environment variables
-                    4. app/lib/env.ts - Environment validation
-                    
-                    Environment variables to configure:
-                    {json.dumps(self.spec.environmentVariables, indent=2)}
-                    
-                    Requirements:
-                    1. Set up proper environment variables
-                    2. Add proper validation using zod
-                    3. Include development defaults
-                    4. Add test environment setup
-                    5. Include proper documentation
-                    6. Add TypeScript types
-                    7. Set up environment validation
-                    8. Add proper security measures
-                    9. Add proper error messages
-                    10. Handle different environments (development, test, production)"""
-                },
-                config=self.session_config
-            )
-            
-            if result:
-                self.console.print("[green]✓ Set up environment configuration[/green]")
-            else:
-                raise Exception("Failed to set up environment")
-        except Exception as e:
-            self.console.print(f"[red]Error configuring environment: {str(e)}[/red]")
+            self.console.print(f"[red]Error transforming template: {str(e)}[/red]")
             raise
