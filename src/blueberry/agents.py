@@ -1,11 +1,16 @@
 from lumos import lumos
-from blueberry.models import Intent, ProjectSpec
+from blueberry.models import Intent, ProjectSpec, ApiMethod
+from blueberry.planning import ProjectPlan, create_project_plan, generate_file_content
 import httpx
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 import json
 import os
 from openai import OpenAI
+from pathlib import Path
+from typing import Dict, List, Union, Any
+import shutil
+from pydantic import BaseModel
 
 
 class MasterAgent:
@@ -342,3 +347,331 @@ class RepairAgent:
         Repairs the code based on the outputs of the terminal results
         """
         pass
+
+
+class ProjectPlan(BaseModel):
+    """Project generation plan created by LLM"""
+    file_structure: Dict[str, Any]
+    components: List[Dict[str, Any]]
+    api_routes: List[Dict[str, Any]]
+    database: Dict[str, Any]
+    auth: Dict[str, Any]
+    config_files: List[Dict[str, Any]]
+
+
+class CodeGeneratorAgent:
+    def __init__(self, spec: ProjectSpec, scaffold_config: dict):
+        self.spec = spec
+        self.scaffold = scaffold_config
+        self.console = Console()
+        self.client = OpenAI()
+
+    def ensure_directory(self, path: Path) -> None:
+        """Ensures a directory exists, creating it and all parent directories if necessary."""
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.console.print(f"[red]Error creating directory {path}: {str(e)}[/red]")
+            raise
+
+    def write_file(self, path: Path, content: str) -> None:
+        """Safely writes content to a file, ensuring the parent directory exists."""
+        try:
+            self.ensure_directory(path.parent)
+            path.write_text(content)
+        except Exception as e:
+            self.console.print(f"[red]Error writing file {path}: {str(e)}[/red]")
+            raise
+
+    def clean_path(self, path_str: str) -> str:
+        """Cleans and normalizes a path string."""
+        return path_str.strip("/").replace("//", "/")
+
+    def clean_code(self, code: str) -> str:
+        """Clean up generated code to remove any extra text or formatting."""
+        if not code:
+            return ""
+            
+        # Remove markdown code blocks
+        if code.startswith("```"):
+            code = code[code.find("\n")+1:]
+            if code.endswith("```"):
+                code = code[:-3]
+        
+        # Remove any potential language specifier
+        first_line = code.split("\n")[0]
+        if first_line.startswith("typescript") or first_line.startswith("javascript"):
+            code = "\n".join(code.split("\n")[1:])
+        
+        # Remove any leading/trailing whitespace
+        code = code.strip()
+        
+        return code
+
+    def write_code_file(self, path: Path, code: str) -> None:
+        """Write code to a file after cleaning it."""
+        clean_code = self.clean_code(code)
+        if not clean_code:
+            raise ValueError(f"No valid code content for {path}")
+        self.write_file(path, clean_code)
+
+    def generate(self, output_dir: str):
+        """Generate the full-stack codebase using scaffold as base."""
+        output_path = None
+        try:
+            output_path = Path(output_dir)
+            self.ensure_directory(output_path)
+            
+            # Validate scaffold configuration
+            if not self.scaffold or not isinstance(self.scaffold, dict):
+                raise ValueError("Invalid scaffold configuration")
+            if "structure" not in self.scaffold or "root" not in self.scaffold["structure"]:
+                raise ValueError("Invalid scaffold structure")
+            
+            # Step 1: Create implementation plan based on scaffold
+            self.console.print("[bold blue]1. Creating implementation plan...[/bold blue]")
+            plan = create_project_plan(
+                spec=self.spec.model_dump(),
+                scaffold=self.scaffold,
+                client=self.client
+            )
+            
+            # Validate plan
+            if not plan.files or not plan.components or not plan.api_routes:
+                raise ValueError("Implementation plan is incomplete")
+            
+            # Step 2: Create base directories from scaffold
+            self.console.print("[bold blue]2. Creating directory structure...[/bold blue]")
+            scaffold_dirs = []
+            for path, info in self.scaffold["structure"]["root"].items():
+                if isinstance(info, dict) and info.get("type") == "directory":
+                    scaffold_dirs.append(path)
+            
+            if not scaffold_dirs:
+                raise ValueError("No directories found in scaffold")
+            
+            for directory in scaffold_dirs:
+                self.ensure_directory(output_path / directory)
+            
+            # Step 3: Write all files following scaffold patterns
+            self.console.print("[bold blue]3. Writing project files...[/bold blue]")
+            generated_files = []
+            for file in plan.files:
+                try:
+                    file_path = output_path / self.clean_path(file.path)
+                    # Generate content using scaffold as reference
+                    content = generate_file_content(
+                        path=file.path,
+                        description=file.description,
+                        scaffold=self.scaffold,
+                        client=self.client
+                    )
+                    self.write_code_file(file_path, content)
+                    generated_files.append(file_path)
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to generate {file.path}: {str(e)}[/yellow]")
+                    continue
+            
+            # Step 4: Write components following scaffold patterns
+            self.console.print("[bold blue]4. Writing components...[/bold blue]")
+            generated_components = []
+            for component in plan.components:
+                try:
+                    component_path = output_path / self.clean_path(component.path)
+                    self.write_code_file(component_path, component.code)
+                    generated_components.append(component_path)
+                    
+                    if component.test_code:
+                        test_path = component_path.parent / "__tests__" / f"{component_path.stem}.test.tsx"
+                        self.ensure_directory(test_path.parent)
+                        self.write_code_file(test_path, component.test_code)
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to generate component {component.name}: {str(e)}[/yellow]")
+                    continue
+            
+            # Step 5: Write API routes following scaffold patterns
+            self.console.print("[bold blue]5. Writing API routes...[/bold blue]")
+            generated_routes = []
+            for route in plan.api_routes:
+                try:
+                    route_path = output_path / "app/api" / self.clean_path(route.path) / "route.ts"
+                    self.write_code_file(route_path, route.code)
+                    generated_routes.append(route_path)
+                    
+                    if route.test_code:
+                        test_path = route_path.parent / "__tests__" / "route.test.ts"
+                        self.ensure_directory(test_path.parent)
+                        self.write_code_file(test_path, route.test_code)
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to generate route {route.path}: {str(e)}[/yellow]")
+                    continue
+            
+            # Step 6: Write database files
+            self.console.print("[bold blue]6. Writing database files...[/bold blue]")
+            migrations_dir = output_path / "migrations"
+            self.ensure_directory(migrations_dir)
+            
+            generated_migrations = []
+            for i, migration in enumerate(plan.database.migrations):
+                try:
+                    migration_file = migrations_dir / f"{i + 1:04d}_{migration['name']}.sql"
+                    if not migration.get("sql"):
+                        raise ValueError(f"No SQL code for migration {migration['name']}")
+                    self.write_file(migration_file, migration["sql"])
+                    generated_migrations.append(migration_file)
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to generate migration {migration['name']}: {str(e)}[/yellow]")
+                    continue
+            
+            # Write database initialization
+            try:
+                db_init_path = output_path / "lib/db/init.ts"
+                self.ensure_directory(db_init_path.parent)
+                if not plan.database.initialization_code:
+                    raise ValueError("No database initialization code generated")
+                self.write_file(db_init_path, plan.database.initialization_code)
+            except Exception as e:
+                self.console.print(f"[yellow]Warning: Failed to generate database initialization: {str(e)}[/yellow]")
+            
+            # Step 7: Write auth files following scaffold patterns
+            self.console.print("[bold blue]7. Writing auth files...[/bold blue]")
+            
+            # Write middleware using scaffold pattern
+            try:
+                middleware_path = output_path / "middleware.ts"
+                if not plan.auth.middleware:
+                    raise ValueError("No middleware code generated")
+                self.write_file(middleware_path, plan.auth.middleware)
+            except Exception as e:
+                self.console.print(f"[yellow]Warning: Failed to generate middleware: {str(e)}[/yellow]")
+            
+            # Write auth components using scaffold patterns
+            auth_dir = output_path / "components/auth"
+            self.ensure_directory(auth_dir)
+            generated_auth_components = []
+            for component in plan.auth.components:
+                try:
+                    if not component.get("code"):
+                        raise ValueError(f"No code for auth component {component['name']}")
+                    self.write_file(auth_dir / f"{component['name']}.tsx", component["code"])
+                    generated_auth_components.append(component['name'])
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to generate auth component {component['name']}: {str(e)}[/yellow]")
+                    continue
+            
+            # Write auth utilities using scaffold patterns
+            auth_utils_dir = output_path / "lib/auth"
+            self.ensure_directory(auth_utils_dir)
+            generated_auth_utils = []
+            for name, code in plan.auth.utils.items():
+                try:
+                    if not code:
+                        raise ValueError(f"No code for auth utility {name}")
+                    self.write_file(auth_utils_dir / f"{name}.ts", code)
+                    generated_auth_utils.append(name)
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to generate auth utility {name}: {str(e)}[/yellow]")
+                    continue
+            
+            # Step 8: Write configuration files from scaffold
+            self.console.print("[bold blue]8. Writing configuration files...[/bold blue]")
+            
+            # Copy scaffold config files
+            generated_configs = []
+            for file_name, file_info in self.scaffold["structure"]["root"].get("config", {}).get("contents", {}).items():
+                try:
+                    if isinstance(file_info, dict) and "config" in file_info:
+                        config_path = output_path / file_name
+                        self.write_file(config_path, json.dumps(file_info["config"], indent=2))
+                        generated_configs.append(file_name)
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to generate config {file_name}: {str(e)}[/yellow]")
+                    continue
+            
+            # Write package.json with scaffold dependencies
+            try:
+                package_json = {
+                    "name": self.spec.project.name.lower().replace(" ", "-"),
+                    "version": "0.1.0",
+                    "private": True,
+                    "scripts": {
+                        "dev": "next dev",
+                        "build": "next build",
+                        "start": "next start",
+                        "lint": "next lint",
+                        "test": "jest"
+                    },
+                    "dependencies": self.scaffold["dependencies"],
+                    "devDependencies": {
+                        "@types/jest": "^29.0.0",
+                        "@testing-library/react": "^14.0.0",
+                        "@testing-library/jest-dom": "^6.0.0",
+                        "jest": "^29.0.0",
+                        "ts-jest": "^29.0.0"
+                    }
+                }
+                self.write_file(output_path / "package.json", json.dumps(package_json, indent=2))
+            except Exception as e:
+                self.console.print(f"[yellow]Warning: Failed to generate package.json: {str(e)}[/yellow]")
+            
+            # Write environment variables from scaffold and spec
+            try:
+                env_vars = self.generate_environment_variables()
+                env_content = "\n".join([f"{var}=" for var in env_vars.keys()])
+                self.write_file(output_path / ".env.example", env_content)
+                self.write_file(output_path / ".env", env_content)
+            except Exception as e:
+                self.console.print(f"[yellow]Warning: Failed to generate environment files: {str(e)}[/yellow]")
+            
+            # Check if we generated enough files
+            if not generated_files or not generated_components or not generated_routes:
+                raise ValueError("Not enough files were generated successfully")
+            
+            return {
+                "files": [f.dict() for f in plan.files],
+                "components": [c.dict() for c in plan.components],
+                "api_routes": [r.dict() for r in plan.api_routes],
+                "migrations": plan.database.migrations,
+                "auth": plan.auth.dict(),
+                "generated": {
+                    "files": len(generated_files),
+                    "components": len(generated_components),
+                    "routes": len(generated_routes),
+                    "migrations": len(generated_migrations),
+                    "auth_components": len(generated_auth_components),
+                    "auth_utils": len(generated_auth_utils),
+                    "configs": len(generated_configs)
+                }
+            }
+            
+        except Exception as e:
+            self.console.print(f"[red]Error during code generation: {str(e)}[/red]")
+            if output_path and output_path.exists():
+                self.console.print("[yellow]Rolling back changes...[/yellow]")
+                try:
+                    shutil.rmtree(output_path)
+                except Exception as cleanup_error:
+                    self.console.print(f"[red]Error during cleanup: {str(cleanup_error)}[/red]")
+            raise
+
+    def generate_environment_variables(self) -> dict:
+        """Generate environment variables configuration."""
+        env_vars = {
+            "NEXT_PUBLIC_SUPABASE_URL": "string",
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY": "string",
+            "SUPABASE_SERVICE_ROLE_KEY": "string"
+        }
+        
+        env_vars.update(self.spec.environmentVariables)
+        
+        if "auth" in self.spec.features:
+            auth_features = self.spec.features["auth"]
+            if "OAuth providers" in auth_features:
+                env_vars.update({
+                    "GOOGLE_CLIENT_ID": "string",
+                    "GOOGLE_CLIENT_SECRET": "string",
+                    "GITHUB_CLIENT_ID": "string",
+                    "GITHUB_CLIENT_SECRET": "string"
+                })
+        
+        return env_vars
