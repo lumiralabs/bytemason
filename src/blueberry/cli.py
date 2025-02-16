@@ -6,11 +6,11 @@ from rich import print as rprint
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.table import Table
-from blueberry.agents import MasterAgent, CodeGeneratorAgent
+import subprocess
+from blueberry.agents import MasterAgent, CodeAgent
 from blueberry.models import ProjectSpec
-import json
+import asyncio
 import os
-from pathlib import Path
 
 app = typer.Typer()
 console = Console()
@@ -244,32 +244,26 @@ def get_user_preferences() -> dict:
 
 @app.command()
 def main(
-    code: Optional[str] = typer.Option(None, "--code", help="The prompt to process"),
-    output_dir: Optional[str] = typer.Option(".", "--output", "-o", help="Output directory for the generated codebase")
+    code: Optional[str] = typer.Option(None, "--code", help="The prompt to process")
 ):
     """
     Blueberry CLI - Process code generation prompts
+    """
+    asyncio.run(async_main(code))
+
+async def async_main(code: Optional[str]):
+    """
+    Async main function to handle coroutines
     """
     if not code:
         console.print("[red]Please provide a prompt using --code flag[/red]")
         raise typer.Exit()
 
-    # Convert output_dir to Path
-    output_path = Path(output_dir)
-    
-    # Create output directory if it doesn't exist
-    if not output_path.exists():
-        try:
-            output_path.mkdir(parents=True)
-        except Exception as e:
-            console.print(f"[red]Error creating output directory: {str(e)}[/red]")
-            raise typer.Exit(1)
-    elif not output_path.is_dir():
-        console.print(f"[red]Output path {output_dir} exists but is not a directory[/red]")
-        raise typer.Exit(1)
-    elif any(output_path.iterdir()):
-        if not Confirm.ask(f"\nOutput directory {output_dir} is not empty. Continue?"):
-            raise typer.Exit()
+    # Get project name from user
+    project_name = Prompt.ask(
+        "\n[cyan]What would you like to name your project?[/cyan]",
+        default="my-app"
+    ).lower().replace(' ', '-')
 
     # Step 1: Understand Intent
     with console.status("[bold green]Understanding your requirements...") as status:
@@ -299,68 +293,43 @@ def main(
         # Display the specification
         display_spec(spec)
         
-        # Step 5: Generate codebase if user wants to proceed
-        if Confirm.ask("\nWould you like to generate the codebase now?"):
-            # Load scaffold configuration
-            scaffold_path = Path(__file__).parent.parent.parent / "scaffold.json"
-            if not scaffold_path.exists():
-                console.print("[red]Error: scaffold.json not found[/red]")
-                raise typer.Exit(1)
-                
-            with open(scaffold_path, "r") as f:
-                scaffold_config = json.load(f)
-            
-            # Initialize code generator
-            code_generator = CodeGeneratorAgent(spec, scaffold_config)
-            
-            # Generate codebase
-            with console.status("[bold green]Generating codebase...") as status:
-                result = code_generator.generate(str(output_path))
-                status.stop()
-            
-            # Display generation summary
-            console.print("\n[bold green]🎉 Codebase generated successfully![/bold green]")
-            
-            # Show summary of generated files
-            files_table = Table(show_header=True)
-            files_table.add_column("Type", style="cyan")
-            files_table.add_column("Count", style="green")
-            
-            files_table.add_row("Files", str(len(result["files"])))
-            files_table.add_row("API Routes", str(len(result["api_routes"])))
-            files_table.add_row("Components", str(len(result["components"])))
-            files_table.add_row("Migrations", str(len(result["migrations"])))
-            files_table.add_row("Auth Components", str(len(result["auth_config"]["components"])))
-            files_table.add_row("Environment Variables", str(len(result["env_vars"])))
-            
-            console.print(Panel(files_table, title="Generation Summary", border_style="green"))
-            
-            # Create .env file
-            env_path = output_path / ".env"
-            with open(env_path, "w") as f:
-                for var, type in result["env_vars"].items():
-                    f.write(f"{var}=\n")
-            
-            console.print(f"\n[yellow]Don't forget to fill in your environment variables in {env_path}[/yellow]")
-            
-            # Show next steps
-            next_steps = [
-                "1. Fill in the environment variables in .env",
-                "2. Install dependencies with 'npm install'",
-                "3. Run database migrations",
-                "4. Start the development server with 'npm run dev'"
-            ]
-            
-            console.print("\n[bold blue]Next steps:[/bold blue]")
-            for step in next_steps:
-                console.print(f"  • {step}")
-            
         # Save spec to file if requested
         if Confirm.ask("\nWould you like to save the specification to a file?"):
-            spec_file = output_path / f"{spec.project.name.lower().replace(' ', '-')}-spec.json"
+            spec_file = f"{project_name}-spec.json"
             with open(spec_file, 'w') as f:
                 f.write(spec.model_dump_json(indent=2))
             console.print(f"\n[green]Specification saved to {spec_file}[/green]")
+            
+        # Ask user to proceed with template generation
+        if Confirm.ask("\nWould you like to proceed with creating the project?"):
+            # Generate Next.js + Supabase project template
+            with console.status("[bold green]Generating Next.js + Supabase project template...") as status:
+                subprocess.run(
+                    ['npx', 'create-next-app', '--example', 'with-supabase', project_name], 
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                status.stop()
+                
+            console.print(f"\n[bold green]✨ Project template generated in ./{project_name}[/bold green]")
+            
+            # Initialize CodeAgent and transform the template
+            console.print("\n[bold blue]Transforming template into your application...[/bold blue]")
+            project_path = os.path.abspath(project_name)
+            code_agent = CodeAgent(project_path, spec)
+            console.print(f"Project path: {project_path}")
+            await code_agent.transform_template()
+            console.print("\n[bold green]✨ Application transformation complete![/bold green]")
+            
+            # Show next steps
+            console.print("\n[bold blue]Next steps:[/bold blue]")
+            console.print("1. cd", project_name)
+            console.print("2. npm install")
+            console.print("3. Update .env.local with your Supabase credentials")
+            console.print("4. npm run dev")
+        else:
+            console.print("\n[yellow]Project creation cancelled.[/yellow]")
             
     except Exception as e:
         console.print(f"\n[red]Error generating specification: {str(e)}[/red]")
