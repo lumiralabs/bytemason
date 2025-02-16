@@ -366,40 +366,74 @@ class CodeAgent:
     def __init__(self, project_path: str, spec: ProjectSpec):
         self.console = Console()
         self.spec = spec
-        self.project_path = project_path
+        
+        # Convert to absolute path and ensure it exists
+        self.project_path = os.path.abspath(project_path)
+        Path(self.project_path).mkdir(parents=True, exist_ok=True)
             
-        # Change to the project directory
-        os.chdir(self.project_path)
+        # Store original directory
+        self.original_dir = os.getcwd()
+            
+        # Initialize git repository if needed
+        git_path = os.path.join(self.project_path, '.git')
+        if not os.path.exists(git_path):
+            self.console.print("[yellow]Initializing git repository...[/yellow]")
+            os.chdir(self.project_path)
+            os.system('git init')
+            
+            # Create .gitignore if it doesn't exist
+            gitignore_path = os.path.join(self.project_path, '.gitignore')
+            if not os.path.exists(gitignore_path):
+                with open(gitignore_path, 'w') as f:
+                    f.write("node_modules/\n.next/\n.env\n.env.local\n*.log\n.DS_Store\n")
+            
+            # Initial commit to establish the repository
+            os.system('git add .')
+            os.system('git commit -m "Initial commit" --allow-empty')
+            
+        # Change back to original directory
+        os.chdir(self.original_dir)
         
-        # Initialize codebase with the local project directory
-        self.codebase = Codebase(".")
+        # Initialize codebase with the project directory
+        try:
+            self.codebase = Codebase(self.project_path)
+     
+                
+        except Exception as e:
+            self.console.print(f"[red]Error initializing codebase: {str(e)}[/red]")
+            raise ValueError(f"Failed to initialize codebase at {self.project_path}: {str(e)}")
         
-        # Log initialization
-        self.console.print(f"[green]Initialized CodeAgent with project at: {self.project_path}[/green]")
+        # Create tools with proper error handling
+        try:
+            self.tools = [
+                ViewFileTool(self.codebase),
+                ListDirectoryTool(self.codebase),
+                SearchTool(self.codebase),
+                EditFileTool(self.codebase),
+                CreateFileTool(self.codebase),
+                DeleteFileTool(self.codebase),
+                RenameFileTool(self.codebase),
+                MoveSymbolTool(self.codebase),
+                RevealSymbolTool(self.codebase),
+                SemanticEditTool(self.codebase),
+                CommitTool(self.codebase)
+            ]
+        except Exception as e:
+            self.console.print(f"[red]Error creating tools: {str(e)}[/red]")
+            raise ValueError(f"Failed to create tools: {str(e)}")
         
-        # Create tools
-        self.tools = [
-            ViewFileTool(self.codebase),
-            ListDirectoryTool(self.codebase),
-            SearchTool(self.codebase),
-            EditFileTool(self.codebase),
-            CreateFileTool(self.codebase),
-            DeleteFileTool(self.codebase),
-            RenameFileTool(self.codebase),
-            MoveSymbolTool(self.codebase),
-            RevealSymbolTool(self.codebase),
-            SemanticEditTool(self.codebase),
-            CommitTool(self.codebase)
-        ]
-        
-        # Create the agent
-        self.agent = create_codebase_agent(
-            codebase=self.codebase,
-            model_name="gpt-4o",
-            temperature=0,
-            verbose=True,
-        )
-        
+        # Create the agent with proper error handling
+        try:
+            self.agent = create_codebase_agent(
+                codebase=self.codebase,
+                model_name="gpt-4o",
+                temperature=0,
+                verbose=True,
+            )
+        except Exception as e:
+            self.console.print(f"[red]Error creating agent: {str(e)}[/red]")
+            raise ValueError(f"Failed to create agent: {str(e)}")
+            
         # Create session config
         self.session_config = {
             "configurable": {
@@ -407,6 +441,45 @@ class CodeAgent:
             }
         }
         
+        # Log successful initialization
+        self.console.print(f"[green]Successfully initialized CodeAgent with project at: {self.project_path}[/green]")
+        
+    def __enter__(self):
+        """Context manager entry to handle directory changes."""
+        os.chdir(self.project_path)
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit to restore original directory."""
+        os.chdir(self.original_dir)
+        
+    def _serialize_for_json(self, obj):
+        """Helper method to serialize objects for JSON."""
+        if hasattr(obj, 'model_dump'):
+            return obj.model_dump()
+        elif hasattr(obj, '__dict__'):
+            return obj.__dict__
+        else:
+            return str(obj)
+            
+    def _remove_path(self, path: str):
+        """Helper method to remove both files and directories safely.
+        
+        Args:
+            path: Path to file or directory to remove
+        """
+        try:
+            full_path = os.path.join(self.project_path, path)
+            if os.path.exists(full_path):
+                if os.path.isdir(full_path):
+                    shutil.rmtree(full_path)
+                    self.console.print(f"[green]Removed directory: {path}[/green]")
+                else:
+                    os.remove(full_path)
+                    self.console.print(f"[green]Removed file: {path}[/green]")
+        except Exception as e:
+            self.console.print(f"[yellow]Warning: Failed to remove {path}: {str(e)}[/yellow]")
+
     async def transform_template(self):
         """Transform the template into the final application based on spec."""
         steps = {
@@ -423,7 +496,9 @@ class CodeAgent:
         for description, step_func in steps.items():
             with self.console.status(f"[bold green]{description}..."):
                 try:
-                    await step_func()
+                    # Use context manager to handle directory changes
+                    with self:
+                        await step_func()
                 except Exception as e:
                     self.console.print(f"[red]Error in {step_func.__name__}: {str(e)}[/red]")
                     raise
@@ -431,21 +506,65 @@ class CodeAgent:
     async def _cleanup_template(self):
         """Remove tutorial and example files."""
         try:
-            # Use agent to analyze and remove files
+            # Common tutorial and example paths to clean up
+            paths_to_clean = [
+                "components/tutorial",
+                "components/examples",
+                "app/examples",
+                "pages/examples",
+                "styles/tutorial.css",
+                "public/tutorial",
+                "docs/tutorial",
+                "test/examples"
+            ]
+            
+            # Clean up known tutorial paths
+            for path in paths_to_clean:
+                self._remove_path(path)
+            
+            # Use agent to identify and clean up additional tutorial content
             result = self.agent.invoke(
                 {
-                    "input": """Analyze the codebase and remove all tutorial and example files.
-                    This includes any demo components, example routes, and tutorial content.
+                    "input": """Analyze the codebase and identify any remaining tutorial or example files.
+                    Look for:
+                    1. Files with 'example', 'demo', or 'tutorial' in their names
+                    2. Components that are purely for demonstration
+                    3. Routes that are part of the tutorial
+                    4. Test files for example components
                     
-                    Also clean up the layout.tsx file by removing any tutorial-related imports and components."""
+                    Return the paths of files to be removed."""
                 },
                 config=self.session_config
             )
             
-            if result:
-                self.console.print("[green]✓ Cleaned up template files[/green]")
-            else:
-                raise Exception("Failed to clean up template")
+            if isinstance(result, str):
+                # Parse the agent's response for file paths
+                for line in result.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#') and not line.startswith('//'):
+                        self._remove_path(line)
+            
+            # Clean up layout.tsx if it exists
+            layout_path = "app/layout.tsx"
+            if os.path.exists(os.path.join(self.project_path, layout_path)):
+                try:
+                    # Use agent to clean up layout.tsx
+                    self.agent.invoke(
+                        {
+                            "input": f"""Clean up the layout.tsx file:
+                            1. Remove tutorial-related imports
+                            2. Remove example components
+                            3. Remove demo content
+                            4. Keep only essential layout structure
+                            5. Update the file at {layout_path}"""
+                        },
+                        config=self.session_config
+                    )
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to clean up layout.tsx: {str(e)}[/yellow]")
+            
+            self.console.print("[green]✓ Cleaned up template files[/green]")
+            
         except Exception as e:
             self.console.print(f"[red]Error cleaning up template: {str(e)}[/red]")
             raise
