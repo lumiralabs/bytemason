@@ -1,0 +1,190 @@
+{
+  "project": {
+    "name": "To-Do Application",
+    "description": "A simple and user-friendly application for managing daily tasks and to-dos.",
+    "techStack": [
+      "Next.js 14",
+      "Supabase",
+      "TypeScript",
+      "Tailwind CSS"
+    ]
+  },
+  "frontendStructure": {
+    "pages": {
+      "/": {
+        "type": "SSR",
+        "components": [
+          "Header",
+          "TaskList",
+          "TaskForm"
+        ],
+        "authRequired": true,
+        "authRedirect": null,
+        "dataFetching": [
+          "fetchUserTasks"
+        ]
+      },
+      "/login": {
+        "type": "Static",
+        "components": [
+          "LoginForm"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      },
+      "/register": {
+        "type": "Static",
+        "components": [
+          "RegisterForm"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      },
+      "/settings": {
+        "type": "SSG",
+        "components": [
+          "UserSettings"
+        ],
+        "authRequired": true,
+        "authRedirect": null,
+        "dataFetching": [
+          "fetchUserSettings"
+        ]
+      }
+    },
+    "components": {
+      "shared": [
+        "Header",
+        "Footer",
+        "Button",
+        "Input"
+      ],
+      "feature": [
+        "TaskList",
+        "TaskForm",
+        "TaskItem",
+        "SearchFilter",
+        "UserRoleManagement"
+      ]
+    }
+  },
+  "apiRoutes": {
+    "task": {
+      "/api/tasks": {
+        "method": "POST",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [
+          "name",
+          "due_date",
+          "priority"
+        ],
+        "supabase": "supabase.from('tasks').insert(taskData)",
+        "body": null,
+        "response": null,
+        "pagination": null
+      },
+      "/api/tasks/[id]": {
+        "method": "DELETE",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [],
+        "supabase": "supabase.from('tasks').delete().eq('id', id)",
+        "body": null,
+        "response": null,
+        "pagination": null
+      }
+    },
+    "auth": {
+      "/api/auth/register": {
+        "method": "POST",
+        "middleware": [],
+        "validation": [
+          "email",
+          "password"
+        ],
+        "supabase": "supabase.auth.signUp({ email, password })",
+        "body": null,
+        "response": null,
+        "pagination": null
+      },
+      "/api/auth/login": {
+        "method": "POST",
+        "middleware": [],
+        "validation": [
+          "email",
+          "password"
+        ],
+        "supabase": "supabase.auth.signIn({ email, password })",
+        "body": null,
+        "response": null,
+        "pagination": null
+      }
+    }
+  },
+  "supabaseConfig": {
+    "tables": {
+      "tasks": {
+        "columns": {
+          "id": "uuid",
+          "user_id": "uuid",
+          "name": "text",
+          "due_date": "timestamp",
+          "priority": "integer",
+          "completed": "boolean",
+          "category": "text[]",
+          "tags": "text[]"
+        },
+        "RLS": {
+          "policy": "user_id = auth.uid()"
+        }
+      },
+      "users": {
+        "columns": {
+          "id": "uuid",
+          "email": "text",
+          "password": "text",
+          "role": "text"
+        },
+        "RLS": {
+          "policy": "id = auth.uid()"
+        }
+      }
+    },
+    "indexes": [
+      "CREATE INDEX ON tasks (user_id)",
+      "CREATE INDEX ON tasks (due_date)",
+      "CREATE INDEX ON users (email)"
+    ]
+  },
+  "features": {
+    "category": [
+      "User registration and login functionality",
+      "Email and social authentication",
+      "CRUD operations for to-do items (Create, Read, Update, Delete)",
+      "Categorization and tagging of tasks",
+      "Due dates and reminders for tasks",
+      "Search and filter options for tasks",
+      "Sorting tasks by priority, due date, and status",
+      "Ability to mark tasks as complete/incomplete",
+      "User role management for different access levels"
+    ]
+  },
+  "environmentVariables": {
+    "NEXT_PUBLIC_SUPABASE_URL": "string",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "string"
+  },
+  "acceptanceCriteria": [
+    "Users can register using email and passwords",
+    "Users can log in and log out",
+    "Users can perform CRUD operations on their to-do tasks",
+    "Tasks can be categorized and tagged accordingly",
+    "Tasks can be sorted and filtered based on user preferences",
+    "Reminders are sent for tasks with due dates",
+    "User roles can be managed with different access levels"
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "project": {
+    "name": "Create To-Do Application",
+    "description": "A simple and efficient to-do list application for managing tasks with user authentication and real-time capabilities.",
+    "techStack": [
+      "Next.js 14",
+      "Supabase",
+      "TypeScript",
+      "Tailwind CSS"
+    ]
+  },
+  "frontendStructure": {
+    "pages": {
+      "/": {
+        "type": "SSR",
+        "components": [
+          "Header",
+          "TaskList",
+          "TaskForm",
+          "FilterBar"
+        ],
+        "authRequired": true,
+        "authRedirect": null,
+        "dataFetching": [
+          "Fetch user's tasks"
+        ]
+      },
+      "/login": {
+        "type": "Static",
+        "components": [
+          "AuthForm"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      },
+      "/register": {
+        "type": "Static",
+        "components": [
+          "AuthForm"
+        ],
+        "authRequired": false,
+        "authRedirect": null,
+        "dataFetching": []
+      }
+    },
+    "components": {
+      "shared": [
+        "Button",
+        "Input",
+        "Loader",
+        "Modal",
+        "ToggleSwitch"
+      ],
+      "feature": [
+        "TaskItem",
+        "FilterBar"
+      ]
+    }
+  },
+  "apiRoutes": {
+    "tasks": {
+      "/api/tasks": {
+        "method": "POST",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [
+          "title: required",
+          "status: optional"
+        ],
+        "supabase": "insert into tasks",
+        "body": null,
+        "response": null,
+        "pagination": null
+      },
+      "/api/tasks/[id]": {
+        "method": "PATCH",
+        "middleware": [
+          "auth checks"
+        ],
+        "validation": [
+          "id: required",
+          "status: required"
+        ],
+        "supabase": "update tasks set status = :status where id = :id",
+        "body": null,
+        "response": null,
+        "pagination": null
+      }
+    },
+    "auth": {
+      "/api/auth/signup": {
+        "method": "POST",
+        "middleware": [],
+        "validation": [
+          "email: required",
+          "password: required"
+        ],
+        "supabase": "sign up with email and password",
+        "body": null,
+        "response": null,
+        "pagination": null
+      },
+      "/api/auth/login": {
+        "method": "POST",
+        "middleware": [],
+        "validation": [
+          "email: required",
+          "password: required"
+        ],
+        "supabase": "sign in with email and password",
+        "body": null,
+        "response": null,
+        "pagination": null
+      }
+    }
+  },
+  "supabaseConfig": {
+    "tables": {
+      "tasks": {
+        "columns": {
+          "id": "uuid",
+          "title": "text",
+          "is_completed": "boolean",
+          "user_id": "uuid",
+          "created_at": "timestamp",
+          "updated_at": "timestamp"
+        },
+        "RLS": {
+          "policy": "user_id = auth.uid()"
+        }
+      }
+    },
+    "indexes": [
+      "create index on tasks (user_id)"
+    ]
+  },
+  "features": {
+    "category": [
+      "User registration and login with email/password",
+      "Email and social authentication (Google, Twitter, etc.)",
+      "Create, update, delete to-do tasks",
+      "Mark tasks as completed or pending",
+      "Filter tasks by status (All, Active, Completed)",
+      "Real-time updates for task changes through Supabase subscriptions",
+      "Dark mode and light mode toggle for UI customization",
+      "User-specific task management (only the user can see their tasks)"
+    ]
+  },
+  "environmentVariables": {
+    "SUPABASE_URL": "string",
+    "SUPABASE_KEY": "string"
+  },
+  "acceptanceCriteria": [
+    "User can register and log in to the application.",
+    "User can create, update, delete their tasks.",
+    "Tasks can be filtered by status.",
+    "Tasks reflect real-time updates across all user sessions.",
+    "User can toggle between dark mode and light mode without page refresh.",
+    "User can see only their own tasks."
+  ]
+}
