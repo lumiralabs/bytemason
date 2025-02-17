@@ -12,6 +12,7 @@ from codegen.extensions.langchain.agent import create_codebase_agent
 class MasterAgent:
     def __init__(self):
         self.client = OpenAI()
+        self.console = Console()
 
     def understand_intent(self, user_input: str) -> Intent:
         """Understand the user's intent from the user's input."""
@@ -150,13 +151,13 @@ Example Output: "Email and social authentication with JWT tokens and password re
         return intent
 
     def create_spec(self, intent: Intent) -> ProjectSpec:
-        """Create a detailed project specification based on the intent."""
+        """Create a detailed project specification based on the intent and save it to a file."""
         try:
-            intent = lumos.call_ai(
+            spec = lumos.call_ai(
                 messages=[
                     {
                         "role": "system",
-                        "content": """Generate a detailed specification for a Next.js + Supabase application.
+                        "content": """Generate a detailed specification for a Next.js 14 + Supabase application.
                         Include:
                         1. React components with clear purposes
                         2. API routes with methods and auth requirements
@@ -174,7 +175,17 @@ Example Output: "Email and social authentication with JWT tokens and password re
                 model="gpt-4o",
             )
             
-            return intent
+            # Create specs directory if it doesn't exist
+            os.makedirs("specs", exist_ok=True)
+            
+            # Save the spec to a file
+            spec_file = os.path.join("specs", f"{spec.name.lower().replace(' ', '_')}_spec.json")
+            with open(spec_file, "w") as f:
+                json.dump(spec.model_dump(), f, indent=2)
+            
+            self.console.print(f"[green]✓ Specification saved to: {spec_file}[/green]")
+            
+            return spec
             
         except Exception as e:
             raise ValueError(f"Failed to create specification: {str(e)}")
@@ -244,12 +255,25 @@ class CodeAgent:
             self.console.print(f"[red]Error initializing CodeAgent: {str(e)}[/red]")
             raise
 
-    def analyze_codebase(self):
+    def _execute_file_edit(self, file_path: str, content: str, session_id: str) -> dict:
+        """Helper method to execute file edits with consistent formatting."""
+        return self.agent.invoke(
+            {
+                "input": f"""Create or modify the file at {file_path} with the following content:
+                
+                // ... existing code ...
+                {content}
+                // ... existing code ..."""
+            },
+            config={"configurable": {"session_id": session_id}}
+        )
+
+    def analyze_codebase(self) -> dict:
         """Analyze the current codebase structure and understand its components."""
         try:
             analysis_result = self.agent.invoke(
                 {
-                    "input": """Analyze the current Next.js codebase and provide:
+                    "input": """Analyze the current Next.js 14 codebase and provide:
                     1. Current app router structure and pages
                     2. Existing components and their purposes
                     3. API routes and their functionality
@@ -258,7 +282,6 @@ class CodeAgent:
                     6. Utility functions and their usage"""
                 },
                 config={"configurable": {"session_id": "analyze_codebase"}}
-
             )
             
             self.console.print("[green]✓ Codebase analysis complete[/green]")
@@ -268,74 +291,181 @@ class CodeAgent:
             self.console.print(f"[red]Error analyzing codebase: {str(e)}[/red]")
             raise
 
-    def implement_features(self):
+    def _generate_implementation_plan(self, analysis: dict) -> dict:
+        """Generate implementation plan based on codebase analysis."""
+        return self.agent.invoke(
+            {
+                "input": f"""Based on the codebase analysis:
+                {analysis}
+                
+                Generate an implementation plan that:
+                1. Works directly in the root directory (NO src directory)
+                2. Leverages existing Supabase authentication - DO NOT create new auth
+                3. Strictly follows Next.js 14 app router patterns and conventions
+                4. Lists new components needed (server/client components)
+                5. Identifies which existing components can be reused
+                6. Notes any conflicts with existing code
+                
+                Follow these Next.js 14 principles:
+                - Work directly in app/ directory (NO src directory)
+                - Place components in app/_components
+                - Place utils in app/_lib or app/_utils
+                - Place types in types/ at root
+                - Use server components by default
+                - Only use client components when needed for interactivity
+                - Leverage React Server Components (RSC) for data fetching
+                - Follow the app router file conventions (page.tsx, layout.tsx, loading.tsx, error.tsx)
+                - Use route handlers in app/api
+                - Implement proper error and loading states
+                
+                Specification to implement:
+                {json.dumps(self.spec.model_dump(), indent=2)}"""
+            },
+            config={"configurable": {"session_id": "generate_implementation_plan"}}
+        )
+
+    def _implement_components(self, implementation_context: dict):
+        """Implement components based on the implementation plan."""
+        for component in self.spec.structure.components:
+            component_plan = self.agent.invoke(
+                {
+                    "input": f"""Plan implementation for component {component.name} following Next.js 14 patterns:
+                    1. Place components in app/_components (NO src directory)
+                    2. Default to server component unless client interactivity needed
+                    3. Use 'use client' directive only when required
+                    4. Implement proper TypeScript types and interfaces
+                    5. Use React Server Components for data fetching
+                    6. Follow app router file conventions
+                    7. Leverage existing Supabase auth hooks and context
+                    8. Style with Tailwind CSS
+                    
+                    Implementation context:
+                    {implementation_context}
+                    
+                    Component details:
+                    {json.dumps(component.model_dump(), indent=2)}
+                    
+                    Return the file path and content that needs to be created or modified."""
+                },
+                config={"configurable": {"session_id": f"plan_component_{component.name}"}}
+            )
+            
+            if component_plan.get('file_path') and component_plan.get('content'):
+                self._execute_file_edit(
+                    component_plan['file_path'],
+                    component_plan['content'],
+                    f"edit_component_{component.name}"
+                )
+
+    def _implement_api_routes(self, implementation_context: dict):
+        """Implement API routes based on the implementation plan."""
+        for route in self.spec.structure.api_routes:
+            route_plan = self.agent.invoke(
+                {
+                    "input": f"""Plan implementation for route handler {route.path} following Next.js 14 patterns:
+                    1. Place directly in app/api directory (NO src directory)
+                    2. Use Next.js 14 Route Handlers
+                    3. Implement request validation with Zod
+                    4. Use existing Supabase auth middleware
+                    5. Follow TypeScript best practices
+                    6. Handle errors appropriately
+                    
+                    Implementation context:
+                    {implementation_context}
+                    
+                    Route details:
+                    {json.dumps(route.model_dump(), indent=2)}
+                    
+                    Return the file path and content that needs to be created or modified."""
+                },
+                config={"configurable": {"session_id": f"plan_route_{route.path}"}}
+            )
+            
+            if route_plan.get('file_path') and route_plan.get('content'):
+                self._execute_file_edit(
+                    route_plan['file_path'],
+                    route_plan['content'],
+                    f"edit_route_{route.path}"
+                )
+
+    def _implement_database(self, implementation_context: dict):
+        """Implement database models based on the implementation plan."""
+        for table in self.spec.structure.database:
+            table_plan = self.agent.invoke(
+                {
+                    "input": f"""Plan implementation for Supabase table {table.name} with:
+                    1. Table definition
+                    2. Relationships and foreign keys
+                    3. Indexes for performance
+                    4. Row Level Security policies using existing auth
+                    5. TypeScript types in types/ directory at root
+                    
+                    Implementation context:
+                    {implementation_context}
+                    
+                    Table details:
+                    {json.dumps(table.model_dump(), indent=2)}
+                    
+                    Return the file paths and content that need to be created or modified."""
+                },
+                config={"configurable": {"session_id": f"plan_table_{table.name}"}}
+            )
+            
+            if table_plan.get('files'):
+                for file_info in table_plan['files']:
+                    if file_info.get('path') and file_info.get('content'):
+                        self._execute_file_edit(
+                            file_info['path'],
+                            file_info['content'],
+                            f"edit_table_{table.name}_{file_info['path']}"
+                        )
+
+    def _integrate_components(self, implementation_context: dict):
+        """Integrate all components based on the implementation plan."""
+        integration_plan = self.agent.invoke(
+            {
+                "input": f"""Plan integration of all components following Next.js 14 patterns:
+                1. Work directly in app/ directory (NO src directory)
+                2. Use app directory structure and routing
+                3. Implement proper layouts with layout.tsx
+                4. Add loading.tsx and error.tsx where needed
+                5. Use existing navigation and auth context
+                6. Follow server/client component patterns
+                7. Leverage existing Supabase auth for protected routes
+                
+                Implementation context:
+                {implementation_context}
+                
+                Return the file paths and content that need to be created or modified."""
+            },
+            config={"configurable": {"session_id": "plan_integration"}}
+        )
+        
+        if integration_plan.get('files'):
+            for file_info in integration_plan['files']:
+                if file_info.get('path') and file_info.get('content'):
+                    self._execute_file_edit(
+                        file_info['path'],
+                        file_info['content'],
+                        f"edit_integration_{file_info['path']}"
+                    )
+
+    def implement_features(self) -> str:
         """Implement features according to the project specification."""
         try:
             # First analyze the codebase
-            self.analyze_codebase()
+            analysis = self.analyze_codebase()
             
-            # Create components
-            for component in self.spec.structure.components:
-                component_result = self.agent.invoke(
-                    {
-                        "input": f"""Create component {component.name} with:
-                        1. TypeScript types and interfaces
-                        2. React hooks and state management
-                        3. API integration
-                        4. Error handling and loading states
-                        5. Proper styling with Tailwind CSS
-                        
-                        Component details:
-                        {json.dumps(component.model_dump(), indent=2)}"""
-                    },
-                    config={"configurable": {"session_id": f"create_component_{component.name}"}}
-                )
+            # Generate implementation plan
+            implementation_context = self._generate_implementation_plan(analysis)
+            self.console.print("\n[bold]Implementation Plan:[/bold]")
+            self.console.print(implementation_context)
             
-            # Create API routes
-            for route in self.spec.structure.api_routes:
-                route_result = self.agent.invoke(
-                    {
-                        "input": f"""Create API route {route.path} with:
-                        1. Request validation with Zod
-                        2. Authentication middleware
-                        3. Database integration
-                        4. Error handling
-                        5. TypeScript types
-                        
-                        Route details:
-                        {json.dumps(route.model_dump(), indent=2)}"""
-                    },
-                    config={"configurable": {"session_id": f"create_route_{route.path}"}}
-                )
-            
-            # Set up database models
-            for table in self.spec.structure.database:
-                db_result = self.agent.invoke(
-                    {
-                        "input": f"""Set up database table {table.name} with:
-                        1. Table definition
-                        2. Relationships and foreign keys
-                        3. Indexes for performance
-                        4. Row Level Security policies
-                        
-                        Table details:
-                        {json.dumps(table.model_dump(), indent=2)}"""
-                    },
-                    config={"configurable": {"session_id": f"create_table_{table.name}"}}
-                )
-            
-            # Integrate components
-            integration_result = self.agent.invoke(
-                {
-                    "input": """Integrate all components by:
-                    1. Setting up proper routing
-                    2. Adding navigation
-                    3. Implementing layouts
-                    4. Setting up state management
-                    5. Adding error boundaries"""
-                },
-                config={"configurable": {"session_id": "integrate_components"}}
-            )
+            # Implement each part of the application
+            self._implement_components(implementation_context)
+            self._implement_api_routes(implementation_context)
+            self._implement_database(implementation_context)
+            self._integrate_components(implementation_context)
             
             self.console.print("[green]✓ Features implemented successfully[/green]")
             return "Features implemented successfully"
@@ -344,7 +474,7 @@ class CodeAgent:
             self.console.print(f"[red]Error implementing features: {str(e)}[/red]")
             raise
 
-    def transform_template(self):
+    def transform_template(self) -> str:
         """Transform the template into the final application based on spec.
         This is the main entry point that coordinates the analysis and implementation."""
         try:
