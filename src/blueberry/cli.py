@@ -15,78 +15,6 @@ import os
 app = typer.Typer()
 console = Console()
 
-PREFERENCE_QUESTIONS = [
-    {
-        "key": "auth_setup",
-        "question": "How would you like to handle authentication?",
-        "options": [
-            "No authentication needed",
-            "Email/Password only",
-            "Social logins (Google, GitHub)",
-            "Magic link authentication",
-            "Full auth (Email + Social + Magic link)"
-        ],
-        "default": "Email/Password only"
-    },
-    {
-        "key": "theme_style",
-        "question": "What color theme would you prefer?",
-        "options": [
-            "Light mode only",
-            "Dark mode only",
-            "Light/Dark mode toggle",
-            "System preference based"
-        ],
-        "default": "Light/Dark mode toggle"
-    },
-    {
-        "key": "color_scheme",
-        "question": "Choose a base color scheme:",
-        "options": [
-            "Blue (Professional)",
-            "Green (Fresh/Natural)",
-            "Purple (Creative)",
-            "Orange (Energetic)",
-            "Neutral (Minimal)",
-            "Custom (You can modify later)"
-        ],
-        "default": "Blue (Professional)"
-    },
-    {
-        "key": "layout_type",
-        "question": "What type of layout would you prefer?",
-        "options": [
-            "Simple (Header + Content)",
-            "Dashboard (Sidebar + Header)",
-            "Landing Page Style",
-            "Custom (Complex layout)"
-        ],
-        "default": "Simple (Header + Content)"
-    },
-    {
-        "key": "responsive_priority",
-        "question": "What's your responsive design priority?",
-        "options": [
-            "Mobile-first",
-            "Desktop-first",
-            "Tablet-focused",
-            "Equal priority to all devices"
-        ],
-        "default": "Mobile-first"
-    },
-    {
-        "key": "data_loading",
-        "question": "How would you like to handle data loading?",
-        "options": [
-            "Static (Build-time)",
-            "Server-side rendering",
-            "Client-side fetching",
-            "Incremental static regeneration"
-        ],
-        "default": "Server-side rendering"
-    }
-]
-
 def display_features(features: List[str]):
     """Display features in a nice formatted way"""
     feature_panels = [Panel(f"✨ {feature}", expand=True) for feature in features]
@@ -161,51 +89,6 @@ def display_spec(spec: ProjectSpec):
         features_table.add_row(f"✓ {feature}")
     console.print(Panel(features_table, title="Features", border_style="blue"))
 
-def get_user_preferences() -> dict:
-    """Get user preferences through interactive prompts"""
-    preferences = {
-        "framework": "Next.js",
-        "database": "Supabase",
-        "styling": "Tailwind CSS",
-        "ui": "shadcn/ui"
-    }
-    
-    console.print("\n[bold blue]🛠️  Let's customize your Next.js + Supabase project[/bold blue]")
-    
-    for question in PREFERENCE_QUESTIONS:
-        console.print(f"\n[cyan]{question['question']}[/cyan]")
-        for i, option in enumerate(question['options'], 1):
-            console.print(f"{i}. {option}")
-        
-        choice = Prompt.ask(
-            "Choose an option",
-            choices=[str(i) for i in range(1, len(question['options']) + 1)],
-            default="1"
-        )
-        preferences[question['key']] = question['options'][int(choice) - 1]
-    
-    # Get shadcn/ui components based on layout type
-    if preferences['layout_type'] == "Simple (Header + Content)":
-        preferences['shadcn_components'] = ["button", "form", "input", "card", "dialog", "dropdown-menu", "navigation-menu"]
-    elif preferences['layout_type'] == "Dashboard (Sidebar + Header)":
-        preferences['shadcn_components'] = ["button", "form", "input", "table", "card", "dialog", 
-                                          "command", "navigation-menu", "dropdown-menu", "tabs", 
-                                          "accordion", "sidebar"]
-    elif preferences['layout_type'] == "Landing Page Style":
-        preferences['shadcn_components'] = ["button", "card", "carousel", "navigation-menu", "dialog",
-                                          "hover-card", "scroll-area", "tabs", "animation"]
-    else:
-        preferences['shadcn_components'] = "all"
-    
-    # Add theme configuration
-    preferences['theme'] = {
-        'style': preferences.pop('theme_style'),
-        'color_scheme': preferences.pop('color_scheme'),
-        'responsive_priority': preferences.pop('responsive_priority')
-    }
-    
-    return preferences
-
 @app.command()
 def main(
     code: Optional[str] = typer.Option(None, "--code", help="The prompt to process")
@@ -223,10 +106,11 @@ async def async_main(code: Optional[str]):
         console.print("[red]Please provide a prompt using --code flag[/red]")
         raise typer.Exit()
 
-    # Get project name from user
+    # Get project name from user with default
     project_name = Prompt.ask(
-        "\n[cyan]What would you like to name your project?[/cyan]",
-        default="my-app"
+        "\n[cyan]What would you like to name your project?[/cyan] (Press Enter to use default)",
+        default="my-app",
+        show_default=True
     ).lower().replace(' ', '-')
 
     # Step 1: Understand Intent
@@ -238,8 +122,11 @@ async def async_main(code: Optional[str]):
     console.print("\n[bold blue]Based on your prompt, we'll build the following features:[/bold blue]")
     display_features(intent.features)
     
-    # Step 2: Verify and modify features with user
-    intent = agent.verify_with_user_loop(intent)
+    # Step 2: Verify and modify features with user (with default option)
+    if not Confirm.ask("\nWould you like to modify these features?", default=False):
+        console.print("[green]Using features as shown above[/green]")
+    else:
+        intent = agent.verify_with_user_loop(intent)
     
     # Step 3: Generate Specification
     try:
@@ -249,8 +136,8 @@ async def async_main(code: Optional[str]):
             
         console.print("\n[bold green]✨ Specification generated successfully![/bold green]")
         
-        # Ask user to proceed with project creation
-        if Confirm.ask("\nWould you like to proceed with creating the project?"):
+        # Ask user to proceed with project creation (with default yes)
+        if Confirm.ask("\nWould you like to proceed with creating the project?", default=True):
             # Clone the boilerplate repository
             with console.status("[bold green]Cloning boilerplate repository...") as status:
                 try:
