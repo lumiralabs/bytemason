@@ -14,3 +14,5 @@ node_modules/
 .next/
 .env
 *.lockb
+
+.DS_Store

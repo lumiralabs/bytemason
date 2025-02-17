@@ -1,8 +1,7 @@
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 class Intent(BaseModel):
-    features: List[str] = Field(..., description="Core features extracted from user's request")
+    features: list[str] = Field(..., description="Core features extracted from user's request")
 
 class SupabaseTable(BaseModel):
     name: str = Field(..., description="Name of the table")
@@ -17,8 +16,8 @@ class APIRoute(BaseModel):
 class Page(BaseModel):
     path: str = Field(..., description="Route path (e.g., /dashboard)")
     description: str = Field(..., description="What this page does")
-    api_routes: List[str] = Field(..., description="API routes this page uses")
-    components: List[str] = Field(..., description="UI components used on this page")
+    api_routes: list[str] = Field(..., description="API routes this page uses")
+    components: list[str] = Field(..., description="UI components used on this page")
 
 class Component(BaseModel):
     name: str = Field(..., description="Name of the component")
@@ -26,13 +25,14 @@ class Component(BaseModel):
     is_client: bool = Field(..., description="Whether this is a client component")
 
 class ProjectStructure(BaseModel):
-    pages: List[Page] = Field(..., description="App pages/routes")
-    components: List[Component] = Field(..., description="Reusable UI components")
-    api_routes: List[APIRoute] = Field(..., description="API endpoints")
-    database: List[SupabaseTable] = Field(..., description="Database tables")
+    pages: list[Page] = Field(..., description="App pages/routes")
+    components: list[Component] = Field(..., description="Reusable UI components")
+    api_routes: list[APIRoute] = Field(..., description="API endpoints")
+    database: list[SupabaseTable] = Field(..., description="Database tables")
+
 
 class ProjectSpec(BaseModel):
     name: str = Field(..., description="Project name")
     description: str = Field(..., description="Project purpose")
-    features: List[str] = Field(..., description="Features to implement")
+    features: list[str] = Field(..., description="Features to implement")
     structure: ProjectStructure = Field(..., description="Project structure")

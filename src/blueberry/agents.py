@@ -5,6 +5,9 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 import json
 import os
+import subprocess
+from datetime import datetime
+from pathlib import Path
 from openai import OpenAI
 from codegen import Codebase
 from codegen.extensions.langchain.agent import create_codebase_agent
@@ -250,6 +253,7 @@ class CodeAgent:
                 temperature=0,
                 verbose=True
             )
+            self.supabase_agent = SupabaseSetupAgent(spec)
             self.console.print(f"[green]Successfully initialized CodeAgent at: {self.project_path}[/green]")
         except Exception as e:
             self.console.print(f"[red]Error initializing CodeAgent: {str(e)}[/red]")
@@ -308,8 +312,8 @@ class CodeAgent:
                 
                 Follow these Next.js 14 principles:
                 - Work directly in app/ directory (NO src directory)
-                - Place components in app/_components
-                - Place utils in app/_lib or app/_utils
+                - Place components in components/ at root
+                - Place utils in lib/ at root
                 - Place types in types/ at root
                 - Use server components by default
                 - Only use client components when needed for interactivity
@@ -330,7 +334,7 @@ class CodeAgent:
             component_plan = self.agent.invoke(
                 {
                     "input": f"""Plan implementation for component {component.name} following Next.js 14 patterns:
-                    1. Place components in app/_components (NO src directory)
+                    1. Place components in components/ at root (NO src directory)
                     2. Default to server component unless client interactivity needed
                     3. Use 'use client' directive only when required
                     4. Implement proper TypeScript types and interfaces
@@ -365,10 +369,9 @@ class CodeAgent:
                     "input": f"""Plan implementation for route handler {route.path} following Next.js 14 patterns:
                     1. Place directly in app/api directory (NO src directory)
                     2. Use Next.js 14 Route Handlers
-                    3. Implement request validation with Zod
-                    4. Use existing Supabase auth middleware
-                    5. Follow TypeScript best practices
-                    6. Handle errors appropriately
+                    3. Use existing Supabase auth middleware
+                    4. Follow TypeScript best practices
+                    5. Handle errors appropriately
                     
                     Implementation context:
                     {implementation_context}
@@ -453,7 +456,7 @@ class CodeAgent:
     def implement_features(self) -> str:
         """Implement features according to the project specification."""
         try:
-            # First analyze the codebase
+            # Then analyze the codebase
             analysis = self.analyze_codebase()
             
             # Generate implementation plan
@@ -478,7 +481,21 @@ class CodeAgent:
         """Transform the template into the final application based on spec.
         This is the main entry point that coordinates the analysis and implementation."""
         try:
-            # First analyze the codebase
+            # Set up Supabase first
+            try:
+                # Get credentials from spec if available
+                project_ref = getattr(self.spec.supabaseConfig, 'projectRef', None) if hasattr(self.spec, 'supabaseConfig') else None
+                anon_key = getattr(self.spec.supabaseConfig, 'anonKey', None) if hasattr(self.spec, 'supabaseConfig') else None
+                service_key = getattr(self.spec.supabaseConfig, 'serviceKey', None) if hasattr(self.spec, 'supabaseConfig') else None
+                
+                # Setup will prompt for missing credentials
+                self.supabase_agent.setup(project_ref, anon_key, service_key)
+            except Exception as e:
+                self.console.print(f"[red]Error setting up Supabase: {str(e)}[/red]")
+                if not Confirm.ask("Would you like to continue with the rest of the implementation?"):
+                    raise
+
+            # Then analyze the codebase
             analysis = self.analyze_codebase()
             self.console.print("\n[bold]Codebase Analysis:[/bold]")
             self.console.print(analysis)
@@ -491,4 +508,188 @@ class CodeAgent:
             
         except Exception as e:
             self.console.print(f"[red]Error transforming template: {str(e)}[/red]")
+            raise
+
+class SupabaseSetupAgent:
+    def __init__(self, spec: ProjectSpec):
+        self.spec = spec
+        self.client = OpenAI()
+        self.console = Console()
+        
+    def get_migration_sql(self) -> str:
+        """Generate SQL migration based on the spec"""
+        try:
+            completion = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """Generate a complete pgsql migration for Supabase based on the specification.
+                        Include:
+                        1. Table creation with proper types and constraints
+                        2. Functions and triggers if any
+                        3. Indexes if any
+                        4. Initial seed data if needed
+                        5. Do not include any RLS policies
+                        
+                        Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, just code."""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}"
+                    }
+                ],
+                timeout=30
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            self.console.print(f"[red]Failed to generate SQL migration: {e}[/red]")
+            raise
+            
+    def apply_migration(self, project_ref: str, anon_key: str, service_key: str) -> None:
+        """Apply migration to Supabase project"""
+        try:
+            # Check for Supabase CLI
+            subprocess.run(["npx", "supabase", "--version"], check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self.console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
+            subprocess.run(
+                ["npm", "install", "supabase", "--save-dev"],
+                cwd=project_dir,
+                check=True,
+            )
+
+        # Extract project ref from URL if needed
+        if "supabase.co" in project_ref:
+            try:
+                # Extract the project reference from URL
+                project_ref = project_ref.split("//")[1].split(".")[0]
+            except IndexError:
+                raise Exception("Invalid Supabase project URL format")
+
+        # Validate project ref format
+        if not project_ref.isalnum() or len(project_ref) != 20:
+            raise Exception("Invalid project ref format. Must be a 20-character alphanumeric string.")
+
+        # Generate migration SQL
+        migration_sql = self.get_migration_sql()
+        
+        # Set up project structure
+        project_dir = Path.cwd() / self.spec.name
+        supabase_dir = project_dir / "supabase"
+        migrations_dir = supabase_dir / "migrations"
+        config_file = supabase_dir / "config.toml"
+        
+        # Create directories
+        migrations_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write migration file
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
+        migration_file.write_text(migration_sql)
+
+        try:
+            # Initialize Supabase project if not already initialized
+            if not config_file.exists():
+                self.console.print("[yellow]Initializing Supabase project...[/yellow]")
+                subprocess.run(
+                    ["npx", "supabase", "init"],
+                    cwd=project_dir,
+                    check=True,
+                )
+
+            # Login to Supabase
+            self.console.print("[yellow]Logging in to Supabase...[/yellow]")
+            subprocess.run(
+                ["npx", "supabase", "login"],
+                cwd=project_dir,
+                check=True,
+            )
+
+            # Link to remote project
+            self.console.print(f"[yellow]Linking to Supabase project: {project_ref}[/yellow]")
+            subprocess.run(
+                [
+                    "npx", "supabase", "link", 
+                    "--project-ref", project_ref,
+                    "--password", "",
+                    "--debug"
+                ],
+                cwd=project_dir,
+                check=True,
+            )
+
+           
+            
+            # Push the migration
+            self.console.print("[yellow]Pushing migration to remote database...[/yellow]")
+            subprocess.run(
+                ["npx", "supabase", "db", "push"],
+                cwd=project_dir,
+                check=True,
+            )
+            
+            self.console.print("[green]✅ Migration applied successfully[/green]")
+            
+        except subprocess.TimeoutExpired:
+            raise Exception("Operation timed out while applying migration")
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else str(e)
+            raise Exception(f"Migration failed: {error_msg}")
+
+    def setup_environment(self, project_ref: str, anon_key: str, service_key: str) -> None:
+        """Set up environment variables for Supabase"""
+        try:
+            env_path = Path.cwd() / self.spec.name / ".env.local"
+            env_content = f"""NEXT_PUBLIC_SUPABASE_URL=https://{project_ref}.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
+SUPABASE_SERVICE_ROLE_KEY={service_key}
+"""
+            env_path.write_text(env_content)
+            self.console.print("[green]✅ Environment variables set up successfully[/green]")
+            
+        except Exception as e:
+            raise Exception(f"Failed to set up environment variables: {str(e)}")
+
+    def _prompt_credentials(self) -> tuple[str, str, str]:
+        """Prompt user for Supabase credentials if not in spec"""
+        self.console.print("\n[bold yellow]Supabase Credentials Required[/bold yellow]")
+        self.console.print("Please provide your Supabase project credentials:")
+        
+        project_ref = Prompt.ask(
+            "\nProject Reference or URL",
+            default=getattr(self.spec.supabaseConfig, 'projectRef', '') if hasattr(self.spec, 'supabaseConfig') else ''
+        )
+        
+        anon_key = Prompt.ask(
+            "Anon Key (public)",
+            password=False,
+        )
+        
+        service_key = Prompt.ask(
+            "Service Role Key (secret)",
+            password=True,
+        )
+        
+        return project_ref, anon_key, service_key
+
+    def setup(self, project_ref: str = None, anon_key: str = None, service_key: str = None) -> None:
+        """Complete Supabase setup including migrations and environment variables"""
+        try:
+            self.console.print("[bold]Starting Supabase setup...[/bold]")
+            
+            # If any credentials are missing, prompt for all of them
+            if not all([project_ref, anon_key, service_key]):
+                project_ref, anon_key, service_key = self._prompt_credentials()
+            
+            # Apply database migrations
+            self.apply_migration(project_ref, anon_key, service_key)
+            
+            # Set up environment variables
+            self.setup_environment(project_ref, anon_key, service_key)
+            
+            self.console.print("[green bold]✅ Supabase setup completed successfully[/green bold]")
+            
+        except Exception as e:
+            self.console.print(f"[red bold]❌ Supabase setup failed: {str(e)}[/red bold]")
             raise
