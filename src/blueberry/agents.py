@@ -253,24 +253,11 @@ class CodeAgent:
                 temperature=0,
                 verbose=True
             )
-            self.supabase_agent = SupabaseSetupAgent(spec)
+            self.supabase_agent = SupabaseSetupAgent(spec, self.project_path)
             self.console.print(f"[green]Successfully initialized CodeAgent at: {self.project_path}[/green]")
         except Exception as e:
             self.console.print(f"[red]Error initializing CodeAgent: {str(e)}[/red]")
             raise
-
-    def _execute_file_edit(self, file_path: str, content: str, session_id: str) -> dict:
-        """Helper method to execute file edits with consistent formatting."""
-        return self.agent.invoke(
-            {
-                "input": f"""Create or modify the file at {file_path} with the following content:
-                
-                // ... existing code ...
-                {content}
-                // ... existing code ..."""
-            },
-            config={"configurable": {"session_id": session_id}}
-        )
 
     def analyze_codebase(self) -> dict:
         """Analyze the current codebase structure and understand its components."""
@@ -295,180 +282,68 @@ class CodeAgent:
             self.console.print(f"[red]Error analyzing codebase: {str(e)}[/red]")
             raise
 
-    def _generate_implementation_plan(self, analysis: dict) -> dict:
-        """Generate implementation plan based on codebase analysis."""
-        return self.agent.invoke(
-            {
-                "input": f"""Based on the codebase analysis:
-                {analysis}
-                
-                Generate an implementation plan that:
-                1. Works directly in the root directory (NO src directory)
-                2. Leverages existing Supabase authentication - DO NOT create new auth
-                3. Strictly follows Next.js 14 app router patterns and conventions
-                4. Lists new components needed (server/client components)
-                5. Identifies which existing components can be reused
-                6. Notes any conflicts with existing code
-                
-                Follow these Next.js 14 principles:
-                - Work directly in app/ directory (NO src directory)
-                - Place components in components/ at root
-                - Place utils in lib/ at root
-                - Place types in types/ at root
-                - Use server components by default
-                - Only use client components when needed for interactivity
-                - Leverage React Server Components (RSC) for data fetching
-                - Follow the app router file conventions (page.tsx, layout.tsx, loading.tsx, error.tsx)
-                - Use route handlers in app/api
-                - Implement proper error and loading states
-                
-                Specification to implement:
-                {json.dumps(self.spec.model_dump(), indent=2)}"""
-            },
-            config={"configurable": {"session_id": "generate_implementation_plan"}}
-        )
-
-    def _implement_components(self, implementation_context: dict):
-        """Implement components based on the implementation plan."""
-        for component in self.spec.structure.components:
-            component_plan = self.agent.invoke(
-                {
-                    "input": f"""Plan implementation for component {component.name} following Next.js 14 patterns:
-                    1. Place components in components/ at root (NO src directory)
-                    2. Default to server component unless client interactivity needed
-                    3. Use 'use client' directive only when required
-                    4. Implement proper TypeScript types and interfaces
-                    5. Use React Server Components for data fetching
-                    6. Follow app router file conventions
-                    7. Leverage existing Supabase auth hooks and context
-                    8. Style with Tailwind CSS
-                    
-                    Implementation context:
-                    {implementation_context}
-                    
-                    Component details:
-                    {json.dumps(component.model_dump(), indent=2)}
-                    
-                    Return the file path and content that needs to be created or modified."""
-                },
-                config={"configurable": {"session_id": f"plan_component_{component.name}"}}
-            )
-            
-            if component_plan.get('file_path') and component_plan.get('content'):
-                self._execute_file_edit(
-                    component_plan['file_path'],
-                    component_plan['content'],
-                    f"edit_component_{component.name}"
-                )
-
-    def _implement_api_routes(self, implementation_context: dict):
-        """Implement API routes based on the implementation plan."""
-        for route in self.spec.structure.api_routes:
-            route_plan = self.agent.invoke(
-                {
-                    "input": f"""Plan implementation for route handler {route.path} following Next.js 14 patterns:
-                    1. Place directly in app/api directory (NO src directory)
-                    2. Use Next.js 14 Route Handlers
-                    3. Use existing Supabase auth middleware
-                    4. Follow TypeScript best practices
-                    5. Handle errors appropriately
-                    
-                    Implementation context:
-                    {implementation_context}
-                    
-                    Route details:
-                    {json.dumps(route.model_dump(), indent=2)}
-                    
-                    Return the file path and content that needs to be created or modified."""
-                },
-                config={"configurable": {"session_id": f"plan_route_{route.path}"}}
-            )
-            
-            if route_plan.get('file_path') and route_plan.get('content'):
-                self._execute_file_edit(
-                    route_plan['file_path'],
-                    route_plan['content'],
-                    f"edit_route_{route.path}"
-                )
-
-    def _implement_database(self, implementation_context: dict):
-        """Implement database models based on the implementation plan."""
-        for table in self.spec.structure.database:
-            table_plan = self.agent.invoke(
-                {
-                    "input": f"""Plan implementation for Supabase table {table.name} with:
-                    1. Table definition
-                    2. Relationships and foreign keys
-                    3. Indexes for performance
-                    4. Row Level Security policies using existing auth
-                    5. TypeScript types in types/ directory at root
-                    
-                    Implementation context:
-                    {implementation_context}
-                    
-                    Table details:
-                    {json.dumps(table.model_dump(), indent=2)}
-                    
-                    Return the file paths and content that need to be created or modified."""
-                },
-                config={"configurable": {"session_id": f"plan_table_{table.name}"}}
-            )
-            
-            if table_plan.get('files'):
-                for file_info in table_plan['files']:
-                    if file_info.get('path') and file_info.get('content'):
-                        self._execute_file_edit(
-                            file_info['path'],
-                            file_info['content'],
-                            f"edit_table_{table.name}_{file_info['path']}"
-                        )
-
-    def _integrate_components(self, implementation_context: dict):
-        """Integrate all components based on the implementation plan."""
-        integration_plan = self.agent.invoke(
-            {
-                "input": f"""Plan integration of all components following Next.js 14 patterns:
-                1. Work directly in app/ directory (NO src directory)
-                2. Use app directory structure and routing
-                3. Implement proper layouts with layout.tsx
-                4. Add loading.tsx and error.tsx where needed
-                5. Use existing navigation and auth context
-                6. Follow server/client component patterns
-                7. Leverage existing Supabase auth for protected routes
-                
-                Implementation context:
-                {implementation_context}
-                
-                Return the file paths and content that need to be created or modified."""
-            },
-            config={"configurable": {"session_id": "plan_integration"}}
-        )
-        
-        if integration_plan.get('files'):
-            for file_info in integration_plan['files']:
-                if file_info.get('path') and file_info.get('content'):
-                    self._execute_file_edit(
-                        file_info['path'],
-                        file_info['content'],
-                        f"edit_integration_{file_info['path']}"
-                    )
-
     def implement_features(self) -> str:
         """Implement features according to the project specification."""
         try:
-            # Then analyze the codebase
+            # Analyze the codebase first
             analysis = self.analyze_codebase()
             
-            # Generate implementation plan
-            implementation_context = self._generate_implementation_plan(analysis)
-            self.console.print("\n[bold]Implementation Plan:[/bold]")
-            self.console.print(implementation_context)
-            
-            # Implement each part of the application
-            self._implement_components(implementation_context)
-            self._implement_api_routes(implementation_context)
-            self._implement_database(implementation_context)
-            self._integrate_components(implementation_context)
+            # Use the agent to implement all features
+            implementation_result = self.agent.invoke(
+                {
+                    "input": f"""Based on the codebase analysis:
+                    {analysis}
+                    
+                    You are an expert full-stack developer implementing features in a Next.js 14 + Supabase application.
+                    Assume that project structure exists already and you are adding files to it or modifying files.
+                    
+                    Implementation Order and Guidelines:
+
+                    1. API Routes Implementation:
+                       * Create all necessary API routes in app/api/ first
+                       * Implement proper error handling and validation
+                       * Set up Supabase queries and database interactions
+                       * Add authentication middleware where needed
+                       * Add TypeScript types for request/response
+                    
+                    2. Component Development:
+                       * Create reusable components after API routes
+                       * Use server components by default
+                       * Create client components only when needed
+                       * Implement loading and error states
+                       * Style with Tailwind CSS
+                       * Add TypeScript types and props validation
+                    
+                    3. Page Integration:
+                       * Create pages last, using existing components and APIs
+                       * Implement data fetching from API routes
+                       * Add proper error boundaries and loading states
+                       * Ensure responsive design
+                       * Follow app router conventions
+                       * Add metadata for SEO
+                    
+                    Project Structure:
+                       * Work directly in app/ directory (NO src directory)
+                       * Components in components/ directory
+                       * API routes in app/api/
+                       * Types in types/ directory
+                       * Utils in lib/ directory
+                    
+                    Code Quality:
+                       * Verify files/folders exist before creating
+                       * Use named imports instead of default imports
+                       * Separate files logically
+                       * Replace '_PLACEHOLDER_HERE_' with appropriate values
+                       * Use relative paths for all operations
+                       * Do not invent data that can be derived from existing code
+                    
+                    Project specification to implement:
+                    {json.dumps(self.spec.model_dump(), indent=2)}
+                    
+                    Create or modify all necessary files following these guidelines."""
+                },
+                config={"configurable": {"session_id": "implement_features"}}
+            )
             
             self.console.print("[green]✓ Features implemented successfully[/green]")
             return "Features implemented successfully"
@@ -511,8 +386,9 @@ class CodeAgent:
             raise
 
 class SupabaseSetupAgent:
-    def __init__(self, spec: ProjectSpec):
+    def __init__(self, spec: ProjectSpec, project_path: str):
         self.spec = spec
+        self.project_path = project_path
         self.client = OpenAI()
         self.console = Console()
         
@@ -555,7 +431,7 @@ class SupabaseSetupAgent:
             self.console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
             subprocess.run(
                 ["npm", "install", "supabase", "--save-dev"],
-                cwd=project_dir,
+                cwd=self.project_path,
                 check=True,
             )
 
@@ -575,8 +451,7 @@ class SupabaseSetupAgent:
         migration_sql = self.get_migration_sql()
         
         # Set up project structure
-        project_dir = Path.cwd() / self.spec.name
-        supabase_dir = project_dir / "supabase"
+        supabase_dir = Path(self.project_path) / "supabase"
         migrations_dir = supabase_dir / "migrations"
         config_file = supabase_dir / "config.toml"
         
@@ -594,7 +469,7 @@ class SupabaseSetupAgent:
                 self.console.print("[yellow]Initializing Supabase project...[/yellow]")
                 subprocess.run(
                     ["npx", "supabase", "init"],
-                    cwd=project_dir,
+                    cwd=self.project_path,
                     check=True,
                 )
 
@@ -602,7 +477,7 @@ class SupabaseSetupAgent:
             self.console.print("[yellow]Logging in to Supabase...[/yellow]")
             subprocess.run(
                 ["npx", "supabase", "login"],
-                cwd=project_dir,
+                cwd=self.project_path,
                 check=True,
             )
 
@@ -615,7 +490,7 @@ class SupabaseSetupAgent:
                     "--password", "",
                     "--debug"
                 ],
-                cwd=project_dir,
+                cwd=self.project_path,
                 check=True,
             )
 
@@ -625,7 +500,7 @@ class SupabaseSetupAgent:
             self.console.print("[yellow]Pushing migration to remote database...[/yellow]")
             subprocess.run(
                 ["npx", "supabase", "db", "push"],
-                cwd=project_dir,
+                cwd=self.project_path,
                 check=True,
             )
             
@@ -640,7 +515,7 @@ class SupabaseSetupAgent:
     def setup_environment(self, project_ref: str, anon_key: str, service_key: str) -> None:
         """Set up environment variables for Supabase"""
         try:
-            env_path = Path.cwd() / self.spec.name / ".env.local"
+            env_path = Path(self.project_path) / ".env.local"
             env_content = f"""NEXT_PUBLIC_SUPABASE_URL=https://{project_ref}.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
 SUPABASE_SERVICE_ROLE_KEY={service_key}
