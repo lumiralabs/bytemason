@@ -12,6 +12,8 @@ from openai import OpenAI
 from codegen import Codebase
 from codegen.extensions.langchain.agent import create_codebase_agent
 
+
+
 class MasterAgent:
     def __init__(self):
         self.client = OpenAI()
@@ -244,6 +246,7 @@ class CodeAgent:
         self.console = Console()
         self.spec = spec
         self.project_path = os.path.abspath(project_path)
+        self.analysis_cache = None  # Initialize cache
         
         try:
             self.codebase = Codebase(self.project_path)
@@ -261,21 +264,26 @@ class CodeAgent:
 
     def analyze_codebase(self) -> dict:
         """Analyze the current codebase structure and understand its components."""
+        if self.analysis_cache:
+            self.console.print("[blue]Using cached codebase analysis[/blue]")
+            return self.analysis_cache
+
         try:
             analysis_result = self.agent.invoke(
                 {
                     "input": """Analyze the current Next.js 14 codebase and provide:
-                    1. Current app router structure and pages
-                    2. Existing components and their purposes
-                    3. API routes and their functionality
-                    4. Data models and database integration
-                    5. Authentication setup if any
-                    6. Utility functions and their usage"""
+1. Current app router structure and pages
+2. Existing components and their purposes
+3. API routes and their functionality
+4. Data models and database integration
+5. Authentication setup if any
+6. Utility functions and their usage"""
                 },
                 config={"configurable": {"session_id": "analyze_codebase"}}
             )
             
             self.console.print("[green]✓ Codebase analysis complete[/green]")
+            self.analysis_cache = analysis_result  # Cache the result
             return analysis_result
             
         except Exception as e:
@@ -283,73 +291,101 @@ class CodeAgent:
             raise
 
     def implement_features(self) -> str:
-        """Implement features according to the project specification."""
+        """Implement features according to the project specification in a deterministic order."""
         try:
             # Analyze the codebase first
             analysis = self.analyze_codebase()
             
-            # Use the agent to implement all features
-            implementation_result = self.agent.invoke(
-                {
-                    "input": f"""Based on the codebase analysis:
-                    {analysis}
-                    
-                    You are an expert full-stack developer implementing features in a Next.js 14 + Supabase application.
-                    Assume that project structure exists already and you are adding files to it or modifying files.
-                    
-                    Implementation Order and Guidelines:
-
-                    1. API Routes Implementation:
-                       * Create all necessary API routes in app/api/ first
-                       * Implement proper error handling and validation
-                       * Set up Supabase queries and database interactions
-                       * Add authentication middleware where needed
-                       * Add TypeScript types for request/response
-                    
-                    2. Component Development:
-                       * Create reusable components after API routes
-                       * Use server components by default
-                       * Create client components only when needed
-                       * Implement loading and error states
-                       * Style with Tailwind CSS
-                       * Add TypeScript types and props validation
-                    
-                    3. Page Integration:
-                       * Create pages last, using existing components and APIs
-                       * Implement data fetching from API routes
-                       * Add proper error boundaries and loading states
-                       * Ensure responsive design
-                       * Follow app router conventions
-                       * Add metadata for SEO
-                    
-                    Project Structure:
-                       * Work directly in app/ directory (NO src directory)
-                       * Components in components/ directory
-                       * API routes in app/api/
-                       * Types in types/ directory
-                       * Utils in lib/ directory
-                    
-                    Code Quality:
-                       * Verify files/folders exist before creating
-                       * Use named imports instead of default imports
-                       * Separate files logically
-                       * Replace '_PLACEHOLDER_HERE_' with appropriate values
-                       * Use relative paths for all operations
-                       * Do not invent data that can be derived from existing code
-                    
-                    Project specification to implement:
-                    {json.dumps(self.spec.model_dump(), indent=2)}
-                    
-                    Create or modify all necessary files following these guidelines."""
-                },
-                config={"configurable": {"session_id": "implement_features"}}
-            )
+            # Define the sequential steps for implementation
+            implementation_steps = [
+                "API Routes Implementation",
+                "Page Integration",
+                "Component Development"
+            ]
             
-            self.console.print("[green]✓ Features implemented successfully[/green]")
-            return "Features implemented successfully"
+            for step in implementation_steps:
+                self.console.print(f"\n[bold cyan]Starting: {step}[/bold cyan]")
+                
+                # Define specific prompts for each step
+                if step == "API Routes Implementation":
+                    input_prompt = f"""Based on the codebase analysis:
+{analysis}
+
+Project specification to implement:
+{json.dumps(self.spec.model_dump(), indent=2)}
+
+You are an expert full-stack developer implementing API routes in a Next.js 14 + Supabase application.
+Ensure that all APIs are created with proper error handling, validation, and authentication using Supabase.
+
+Implement the API routes as per the specification.
+
+**IMPORTANT:** After completing the API routes, proceed to the next implementation step without terminating the process. Do not include phrases like "Finished chain" or indicate completion until all steps are done.
+"""
+                elif step == "Page Integration":
+                    input_prompt = f"""Based on the previous implementation of API routes and the codebase analysis:
+{analysis}
+
+Project specification to implement:
+{json.dumps(self.spec.model_dump(), indent=2)}
+
+You are an expert full-stack developer integrating pages with the existing API routes in a Next.js 14 + Supabase application.
+Ensure that all pages are created with proper data fetching, error boundaries, loading states, and responsive design.
+
+Implement the pages as per the specification.
+
+**IMPORTANT:** After completing the page integration, proceed to the next implementation step without terminating the process. Do not include phrases like "Finished chain" or indicate completion until all steps are done.
+"""
+                elif step == "Component Development":
+                    input_prompt = f"""Based on the previous implementation of API routes and pages, and the codebase analysis:
+{analysis}
+
+Project specification to implement:
+{json.dumps(self.spec.model_dump(), indent=2)}
+
+You are an expert full-stack developer creating reusable components in a Next.js 14 + Supabase application.
+Ensure that all components are developed with server-side rendering where appropriate, client-side interactivity when needed, loading and error states, styled with Tailwind CSS, and properly typed with TypeScript.
+
+Develop the components as per the specification.
+
+**IMPORTANT:** This is the final implementation step. Once completed, the entire feature implementation process should conclude without any premature termination messages.
+"""
+                else:
+                    self.console.print(f"[red]Unknown implementation step: {step}[/red]")
+                    continue
+
+                # Invoke the agent for the current step
+                implementation_result = self.agent.invoke(
+                    {
+                        "input": input_prompt
+                    },
+                    config={"configurable": {"session_id": f"implement_features_{step.lower().replace(' ', '_')}"}}
+                )
+                
+                # Handle file creation and updates
+                for file_change in implementation_result.get("file_changes", []):
+                    file_path = os.path.join(self.project_path, file_change["path"])
+                    file_content = file_change["content"]
+                    
+                    if os.path.exists(file_path):
+                        # Update existing file
+                        with open(file_path, "w") as f:
+                            f.write(file_content)
+                        self.console.print(f"[blue]✏️ Updated existing file: {file_path}[/blue]")
+                    else:
+                        # Create new file
+                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                        with open(file_path, "w") as f:
+                            f.write(file_content)
+                        self.console.print(f"[green]🆕 Created new file: {file_path}[/green]")
+                
+                self.console.print(f"[green]✓ {step} completed successfully[/green]")
+            
+            self.console.print("[green]✓ All features implemented and files updated successfully[/green]")
+            return "All features implemented and files updated successfully"
             
         except Exception as e:
-            self.console.print(f"[red]Error implementing features: {str(e)}[/red]")
+            self.console.print(f"[red]Error during feature implementation: {str(e)}[/red]")
+            # Implement retry logic here if necessary
             raise
 
     def transform_template(self) -> str:
@@ -371,9 +407,9 @@ class CodeAgent:
                     raise
 
             # Then analyze the codebase
-            analysis = self.analyze_codebase()
-            self.console.print("\n[bold]Codebase Analysis:[/bold]")
-            self.console.print(analysis)
+            # analysis = self.analyze_codebase()
+            # self.console.print("\n[bold]Codebase Analysis:[/bold]")
+            # self.console.print(analysis)
 
             # Then implement the features
             result = self.implement_features()
