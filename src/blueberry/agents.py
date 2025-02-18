@@ -166,6 +166,12 @@ Example Output: "Email and social authentication with JWT tokens and password re
                         2. API routes with methods and auth requirements
                         3. Database tables with columns and relationships
                         4. Required environment variables
+                        5. Pages with:
+                           - Full paths (e.g. /dashboard, /profile)
+                           - Associated API routes needed
+                           - Required components
+                           - Auth requirements
+                           
                         
                         Keep the specification focused and practical."""
                     },
@@ -288,11 +294,18 @@ class CodeAgent:
             # Analyze the codebase first
             analysis = self.analyze_codebase()
             
+            # Read master prompt
+            with open("prompts/master_prompt.md", "r") as f:
+                master_prompt = f.read()
+            
             # Use the agent to implement all features
             implementation_result = self.agent.invoke(
                 {
                     "input": f"""Based on the codebase analysis:
                     {analysis}
+                    
+                    Master Prompt Guidelines:
+                    {master_prompt}
                     
                     You are an expert full-stack developer implementing features in a Next.js 14 + Supabase application.
                     Assume that project structure exists already and you are adding files to it or modifying files.
@@ -316,11 +329,17 @@ class CodeAgent:
                     
                     3. Page Integration:
                        * Create pages last, using existing components and APIs
-                       * Implement data fetching from API routes
-                       * Add proper error boundaries and loading states
+                       * Create a page.tsx file for each page in the spec
+                       * Each page should:
+                         - Import and use the relevant components
+                         - Implement data fetching from API routes
+                         - Add proper error boundaries and loading states
+                         - Include metadata exports for SEO
+                         - Follow app router conventions for layouts
+                       * Create corresponding layout.tsx files where needed
+                       * Implement proper navigation between pages
+                       * Add loading.tsx and error.tsx for each route
                        * Ensure responsive design
-                       * Follow app router conventions
-                       * Add metadata for SEO
                     
                     Project Structure:
                        * Work directly in app/ directory (NO src directory)
@@ -328,6 +347,7 @@ class CodeAgent:
                        * API routes in app/api/
                        * Types in types/ directory
                        * Utils in lib/ directory
+                       * Pages in app/ directory
                     
                     Code Quality:
                        * Verify files/folders exist before creating
@@ -370,10 +390,10 @@ class CodeAgent:
                 if not Confirm.ask("Would you like to continue with the rest of the implementation?"):
                     raise
 
-            # Then analyze the codebase
-            analysis = self.analyze_codebase()
-            self.console.print("\n[bold]Codebase Analysis:[/bold]")
-            self.console.print(analysis)
+            # # Then analyze the codebase
+            # analysis = self.analyze_codebase()
+            # self.console.print("\n[bold]Codebase Analysis:[/bold]")
+            # self.console.print(analysis)
 
             # Then implement the features
             result = self.implement_features()

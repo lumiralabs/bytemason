@@ -1,0 +1,172 @@
+{
+  "name": "Next.js 14 + Supabase Task Management App",
+  "description": "A task management application that allows users to authenticate, manage tasks, categorize and share tasks with real-time updates.",
+  "features": [
+    "Create a user authentication system to allow users to register, login, and logout.",
+    "Implement secure user authentication using Supabase Auth with options like magic links or OAuth.",
+    "Enable users to create, read, update, and delete tasks.",
+    "Design a data model for storing tasks which includes attributes like title, description, completion status, and due date.",
+    "Develop a data model for user profiles to associate tasks with specific users.",
+    "Build a RESTful API to handle task-related operations: fetching tasks, adding new tasks, updating existing tasks, and deleting tasks.",
+    "Implement real-time updates and synchronization of tasks using Supabase's real-time capabilities.",
+    "Add features for categorizing or tagging tasks to organize them better.",
+    "Ensure data security and privacy with role-based access controls and secure storage of task data.",
+    "Enable task sharing feature to allow multiple users to collaborate on tasks."
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/",
+        "description": "Home page redirecting users to dashboard or login if not authenticated.",
+        "api_routes": [],
+        "components": []
+      },
+      {
+        "path": "/login",
+        "description": "Login page for registered users, including OAuth and magic link options.",
+        "api_routes": [
+          "/api/auth/login"
+        ],
+        "components": [
+          "LoginForm"
+        ]
+      },
+      {
+        "path": "/register",
+        "description": "New user registration page.",
+        "api_routes": [
+          "/api/auth/signup"
+        ],
+        "components": [
+          "RegisterForm"
+        ]
+      },
+      {
+        "path": "/dashboard",
+        "description": "User dashboard showing an overview of tasks and categories.",
+        "api_routes": [
+          "/api/tasks",
+          "/api/categories"
+        ],
+        "components": [
+          "TaskList",
+          "CategoryList",
+          "TaskForm"
+        ]
+      },
+      {
+        "path": "/task/[id]",
+        "description": "Individual task detail and edit page.",
+        "api_routes": [
+          "/api/tasks/[id]"
+        ],
+        "components": [
+          "TaskDetail",
+          "TaskForm"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "LoginForm",
+        "description": "Component for user login inputs and actions.",
+        "is_client": true
+      },
+      {
+        "name": "RegisterForm",
+        "description": "Component for new user registration inputs and actions.",
+        "is_client": true
+      },
+      {
+        "name": "TaskList",
+        "description": "Displays a list of tasks for the user.",
+        "is_client": true
+      },
+      {
+        "name": "TaskDetail",
+        "description": "Shows details of a task and enables edit capabilities.",
+        "is_client": true
+      },
+      {
+        "name": "TaskForm",
+        "description": "Form to create or update a task.",
+        "is_client": true
+      },
+      {
+        "name": "CategoryList",
+        "description": "Displays a list of task categories or tags.",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/auth/signup",
+        "method": "POST",
+        "description": "Register new users, handle data validation and save user to Supabase Auth.",
+        "query": "Supabase Auth API for user signup"
+      },
+      {
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "Authenticate existing users using password, magic link, or OAuth.",
+        "query": "Supabase Auth API for user login"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "GET",
+        "description": "Fetch all tasks associated with the current user.",
+        "query": "SELECT * FROM tasks WHERE user_id = auth.uid()"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "POST",
+        "description": "Create a new task with data from request body.",
+        "query": "INSERT INTO tasks (title, description, status, due_date, user_id, category_id) VALUES (...) RETURNING *"
+      },
+      {
+        "path": "/api/tasks/[id]",
+        "method": "GET",
+        "description": "Fetch a single task by ID for current user.",
+        "query": "SELECT * FROM tasks WHERE id = :id AND user_id = auth.uid()"
+      },
+      {
+        "path": "/api/tasks/[id]",
+        "method": "PUT",
+        "description": "Update a task by ID with new data from request body.",
+        "query": "UPDATE tasks SET ... WHERE id = :id AND user_id = auth.uid() RETURNING *"
+      },
+      {
+        "path": "/api/tasks/[id]",
+        "method": "DELETE",
+        "description": "Delete a task by ID for current user.",
+        "query": "DELETE FROM tasks WHERE id = :id AND user_id = auth.uid() RETURNING *"
+      },
+      {
+        "path": "/api/categories",
+        "method": "GET",
+        "description": "Fetch all categories available to the user.",
+        "query": "SELECT * FROM categories WHERE user_id = auth.uid()"
+      },
+      {
+        "path": "/api/categories",
+        "method": "POST",
+        "description": "Create a new category with data from request body.",
+        "query": "INSERT INTO categories (name, user_id) VALUES (...) RETURNING *"
+      }
+    ],
+    "database": [
+      {
+        "name": "users",
+        "schema": "CREATE TABLE users (id UUID PRIMARY KEY, email TEXT UNIQUE, created_at TIMESTAMP DEFAULT NOW())"
+      },
+      {
+        "name": "tasks",
+        "schema": "CREATE TABLE tasks (id UUID PRIMARY KEY, title TEXT, description TEXT, status TEXT, due_date DATE, user_id UUID REFERENCES users(id), category_id UUID REFERENCES categories(id))"
+      },
+      {
+        "name": "categories",
+        "schema": "CREATE TABLE categories (id UUID PRIMARY KEY, name TEXT, user_id UUID REFERENCES users(id))"
+      }
+    ]
+  }
+}
