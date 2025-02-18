@@ -1,0 +1,190 @@
+{
+  "name": "To-do List Application",
+  "description": "A Next.js 14 application integrated with Supabase to manage to-do lists collaboratively with features like real-time updates, tagging, reminders, and more.",
+  "features": [
+    "User authentication with email/password and social logins",
+    "Create, read, update, and delete (CRUD) operations for to-do items",
+    "Real-time updates for shared to-do lists",
+    "Tagging or categorizing tasks",
+    "Due date reminders and notifications",
+    "Task prioritization",
+    "Collaborative features for multiple users managing the same list"
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/dashboard",
+        "description": "Displays user's to-do lists and options to create new lists.",
+        "api_routes": [
+          "/api/lists",
+          "/api/todos"
+        ],
+        "components": [
+          "TodoList",
+          "NewListForm",
+          "NotificationButton"
+        ]
+      },
+      {
+        "path": "/profile",
+        "description": "User profile management including authentication options.",
+        "api_routes": [
+          "/api/profile"
+        ],
+        "components": [
+          "ProfileForm"
+        ]
+      },
+      {
+        "path": "/list/[id]",
+        "description": "View and interact with a specific to-do list, with options for real-time update and collaboration.",
+        "api_routes": [
+          "/api/todos",
+          "/api/tags"
+        ],
+        "components": [
+          "TodoItem",
+          "CollaboratorForm",
+          "TagManager"
+        ]
+      },
+      {
+        "path": "/login",
+        "description": "Handles user login with email/password or social platforms.",
+        "api_routes": [],
+        "components": [
+          "LoginForm"
+        ]
+      },
+      {
+        "path": "/register",
+        "description": "User registration page with options for email or social sign-up.",
+        "api_routes": [],
+        "components": [
+          "RegisterForm"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "TodoList",
+        "description": "Displays a list of to-do items for a given list.",
+        "is_client": true
+      },
+      {
+        "name": "NewListForm",
+        "description": "Form to create a new to-do list.",
+        "is_client": true
+      },
+      {
+        "name": "NotificationButton",
+        "description": "Allows users to enable or disable notifications for due dates.",
+        "is_client": true
+      },
+      {
+        "name": "ProfileForm",
+        "description": "Form to update user profile details.",
+        "is_client": true
+      },
+      {
+        "name": "TodoItem",
+        "description": "Component representing a single to-do item, allowing individual updates and mark as complete.",
+        "is_client": true
+      },
+      {
+        "name": "CollaboratorForm",
+        "description": "Form to add or remove collaborators on a to-do list.",
+        "is_client": true
+      },
+      {
+        "name": "TagManager",
+        "description": "Manage tags for categorizing tasks within a list.",
+        "is_client": true
+      },
+      {
+        "name": "LoginForm",
+        "description": "Form for user authentication via email/password or social login.",
+        "is_client": true
+      },
+      {
+        "name": "RegisterForm",
+        "description": "Registration form for new user sign-up.",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/lists",
+        "method": "GET",
+        "description": "Fetch all lists for the authenticated user.",
+        "query": "SELECT * FROM lists WHERE owner_id = user_id"
+      },
+      {
+        "path": "/api/lists",
+        "method": "POST",
+        "description": "Create a new list for the authenticated user.",
+        "query": "INSERT INTO lists (name, owner_id) VALUES ('list_name', user_id)"
+      },
+      {
+        "path": "/api/todos",
+        "method": "GET",
+        "description": "Fetch all to-do items for a given list.",
+        "query": "SELECT * FROM todos WHERE list_id = $1"
+      },
+      {
+        "path": "/api/todos",
+        "method": "POST",
+        "description": "Create a new to-do item within a list.",
+        "query": "INSERT INTO todos (description, list_id, priority, due_date) VALUES ('desc', list_id, 'priority', 'due_date')"
+      },
+      {
+        "path": "/api/todos",
+        "method": "PUT",
+        "description": "Update a specific to-do item details.",
+        "query": "UPDATE todos SET field = value WHERE id = todo_id"
+      },
+      {
+        "path": "/api/todos",
+        "method": "DELETE",
+        "description": "Delete a specific to-do item.",
+        "query": "DELETE FROM todos WHERE id = todo_id"
+      },
+      {
+        "path": "/api/tags",
+        "method": "GET",
+        "description": "Fetch all tags for a specific list or user.",
+        "query": "SELECT * FROM tags WHERE list_id = $1"
+      },
+      {
+        "path": "/api/tags",
+        "method": "POST",
+        "description": "Create a new tag for task categorization.",
+        "query": "INSERT INTO tags (name, list_id) VALUES ('tag', list_id)"
+      },
+      {
+        "path": "/api/profile",
+        "method": "GET",
+        "description": "Fetch user profile information.",
+        "query": "SELECT * FROM users WHERE id = user_id"
+      }
+    ],
+    "database": [
+      {
+        "name": "users",
+        "schema": "CREATE TABLE users (id SERIAL PRIMARY KEY, email VARCHAR UNIQUE, password VARCHAR, social_id VARCHAR, created_at TIMESTAMP)"
+      },
+      {
+        "name": "lists",
+        "schema": "CREATE TABLE lists (id SERIAL PRIMARY KEY, name VARCHAR, owner_id INTEGER REFERENCES users(id), created_at TIMESTAMP)"
+      },
+      {
+        "name": "todos",
+        "schema": "CREATE TABLE todos (id SERIAL PRIMARY KEY, description TEXT, list_id INTEGER REFERENCES lists(id), priority INTEGER, due_date TIMESTAMP, completed BOOLEAN DEFAULT FALSE, created_at TIMESTAMP)"
+      },
+      {
+        "name": "tags",
+        "schema": "CREATE TABLE tags (id SERIAL PRIMARY KEY, name VARCHAR, list_id INTEGER REFERENCES lists(id))"
+      }
+    ]
+  }
+}

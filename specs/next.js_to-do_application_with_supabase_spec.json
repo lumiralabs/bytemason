@@ -1,0 +1,127 @@
+{
+  "name": "Next.js To-Do Application with Supabase",
+  "description": "A to-do application offering user authentication and personalized task management, leveraging Supabase for storage and Next.js for the frontend and server-side abilities.",
+  "features": [
+    "User authentication with email/password and social providers (e.g., Google)",
+    "Basic CRUD operations for to-do items (create, read, update, delete)",
+    "User-specific to-do lists to ensure users only see their own tasks",
+    "Due dates and priority levels for to-do items",
+    "Ability to mark tasks as completed or pending",
+    "List filtering and sorting options (by date, priority, etc.)",
+    "Optional notifications or reminders for due to-do items",
+    "Secure storage of user and task data",
+    "User registration and profile management"
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/",
+        "description": "Landing page showcasing app features and login/register buttons.",
+        "api_routes": [],
+        "components": [
+          "Header",
+          "Footer",
+          "LandingInfo"
+        ]
+      },
+      {
+        "path": "/dashboard",
+        "description": "Main dashboard showing the list of to-dos for the logged-in user.",
+        "api_routes": [
+          "/api/todos"
+        ],
+        "components": [
+          "TodoList",
+          "TodoItem",
+          "Sidebar",
+          "Header",
+          "FilterBar",
+          "AddTodoButton"
+        ]
+      },
+      {
+        "path": "/profile",
+        "description": "User profile page allowing users to change their password, manage connected social accounts, and update profile information.",
+        "api_routes": [
+          "/api/user"
+        ],
+        "components": [
+          "ProfileForm",
+          "Header",
+          "Footer"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "Header",
+        "description": "Displays the app logo and navigation links for logged-in users.",
+        "is_client": false
+      },
+      {
+        "name": "Footer",
+        "description": "Contains legal links and app information.",
+        "is_client": false
+      },
+      {
+        "name": "LandingInfo",
+        "description": "Shows information about the app's features for new visitors.",
+        "is_client": false
+      },
+      {
+        "name": "TodoList",
+        "description": "Shows the list of to-dos specific to the user.",
+        "is_client": true
+      },
+      {
+        "name": "TodoItem",
+        "description": "Represents a single to-do item, showing its details and allowing updates.",
+        "is_client": true
+      },
+      {
+        "name": "Sidebar",
+        "description": "Provides list navigation options and logout functionality for the user.",
+        "is_client": true
+      },
+      {
+        "name": "FilterBar",
+        "description": "Offers sorting and filtering options for the to-do list.",
+        "is_client": true
+      },
+      {
+        "name": "AddTodoButton",
+        "description": "Button to trigger the addition of a new todo item.",
+        "is_client": true
+      },
+      {
+        "name": "ProfileForm",
+        "description": "Allows editing of user profile details and social connections.",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/todos",
+        "method": "GET, POST, PUT, DELETE",
+        "description": "Handles creation, reading, updating, and deletion of to-do items for the authenticated user.",
+        "query": "SELECT * FROM todos WHERE user_id = auth.uid()"
+      },
+      {
+        "path": "/api/user",
+        "method": "GET, PUT",
+        "description": "Fetches or updates the authenticated user's profile information.",
+        "query": "SELECT * FROM users WHERE id = auth.uid()"
+      }
+    ],
+    "database": [
+      {
+        "name": "users",
+        "schema": "CREATE TABLE IF NOT EXISTS users ( id UUID PRIMARY KEY, email TEXT UNIQUE NOT NULL, password TEXT, name TEXT, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ )"
+      },
+      {
+        "name": "todos",
+        "schema": "CREATE TABLE IF NOT EXISTS todos ( id UUID PRIMARY KEY, user_id UUID REFERENCES users(id), title TEXT NOT NULL, description TEXT, due_date TIMESTAMPTZ, priority INTEGER, status BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ, CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES users(id) )"
+      }
+    ]
+  }
+}

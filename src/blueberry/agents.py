@@ -298,8 +298,8 @@ class CodeAgent:
             with open("prompts/master_prompt.md", "r") as f:
                 master_prompt = f.read()
             
-            # Use the agent to implement all features
-            implementation_result = self.agent.invoke(
+            # 1. First implement database and API routes
+            database_api_result = self.agent.invoke(
                 {
                     "input": f"""Based on the codebase analysis:
                     {analysis}
@@ -307,62 +307,103 @@ class CodeAgent:
                     Master Prompt Guidelines:
                     {master_prompt}
                     
-                    You are an expert full-stack developer implementing features in a Next.js 14 + Supabase application.
-                    Assume that project structure exists already and you are adding files to it or modifying files.
-                    
-                    Implementation Order and Guidelines:
-
+                    You are implementing the database and API routes for a Next.js 14 + Supabase application.
+                    Focus ONLY on:
                     1. API Routes Implementation:
-                       * Create all necessary API routes in app/api/ first
+                       * Create all necessary API routes in app/api/
                        * Implement proper error handling and validation
                        * Set up Supabase queries and database interactions
                        * Add authentication middleware where needed
                        * Add TypeScript types for request/response
                     
-                    2. Component Development:
-                       * Create reusable components after API routes
+                    Project Structure:
+                       * API routes in app/api/
+                       * Types in types/ directory
+                       * Utils in lib/ directory
+                    
+                    Project specification to implement:
+                    {json.dumps(self.spec.model_dump(), indent=2)}
+                    
+                    Create or modify all necessary API route files."""
+                },
+                config={"configurable": {"session_id": "implement_database_api"}}
+            )
+            
+            # 2. Then implement reusable components
+            components_result = self.agent.invoke(
+                {
+                    "input": f"""Based on the previous implementation and analysis:
+                    Previous Implementation: {database_api_result}
+                    Codebase Analysis: {analysis}
+                    
+                    Master Prompt Guidelines:
+                    {master_prompt}
+                    
+                    You are implementing reusable components for a Next.js 14 + Supabase application.
+                    Focus ONLY on:
+                    1. Component Development:
+                       * Create reusable components
                        * Use server components by default
                        * Create client components only when needed
                        * Implement loading and error states
                        * Style with Tailwind CSS
                        * Add TypeScript types and props validation
                     
-                    3. Page Integration:
-                       * Create pages last, using existing components and APIs
+                    Project Structure:
+                       * Components in components/ directory
+                       * Types in types/ directory
+                    
+                    Project specification to implement:
+                    {json.dumps(self.spec.model_dump(), indent=2)}
+                    
+                    Create or modify all necessary component files."""
+                },
+                config={"configurable": {"session_id": "implement_components"}}
+            )
+            
+            # 3. Finally implement pages and layouts together
+            pages_layouts_result = self.agent.invoke(
+                {
+                    "input": f"""Based on all previous implementations and analysis:
+                    API Implementation: {database_api_result}
+                    Components Implementation: {components_result}
+                    Codebase Analysis: {analysis}
+                    
+                    Master Prompt Guidelines:
+                    {master_prompt}
+                    
+                    You are implementing pages and layouts for a Next.js 14 + Supabase application.
+                    Focus on:
+                    1. Layout Implementation:
+                       * Create layout.tsx files for each section
+                       * Implement navigation structure
+                       * Set up authentication boundaries
+                       * Add error boundaries
+                       * Ensure responsive design
+                    
+                    2. Page Integration:
+                       * Create pages using existing components and APIs
                        * Create a page.tsx file for each page in the spec
                        * Each page should:
                          - Import and use the relevant components
                          - Implement data fetching from API routes
                          - Add proper error boundaries and loading states
                          - Include metadata exports for SEO
-                         - Follow app router conventions for layouts
-                       * Create corresponding layout.tsx files where needed
-                       * Implement proper navigation between pages
+                         - Follow app router conventions
                        * Add loading.tsx and error.tsx for each route
                        * Ensure responsive design
                     
                     Project Structure:
-                       * Work directly in app/ directory (NO src directory)
-                       * Components in components/ directory
-                       * API routes in app/api/
-                       * Types in types/ directory
-                       * Utils in lib/ directory
-                       * Pages in app/ directory
-                    
-                    Code Quality:
-                       * Verify files/folders exist before creating
-                       * Use named imports instead of default imports
-                       * Separate files logically
-                       * Replace '_PLACEHOLDER_HERE_' with appropriate values
-                       * Use relative paths for all operations
-                       * Do not invent data that can be derived from existing code
+                       * Pages and layouts in app/ directory
+                       * Use existing components from components/
+                       * Use existing API routes from app/api/
                     
                     Project specification to implement:
                     {json.dumps(self.spec.model_dump(), indent=2)}
                     
-                    Create or modify all necessary files following these guidelines."""
+                    Create or modify all necessary page and layout files."""
                 },
-                config={"configurable": {"session_id": "implement_features"}}
+                config={"configurable": {"session_id": "implement_pages_layouts"}}
             )
             
             self.console.print("[green]✓ Features implemented successfully[/green]")

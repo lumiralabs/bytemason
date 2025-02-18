@@ -1,0 +1,188 @@
+{
+  "name": "TaskManagerApp",
+  "description": "A task management application that allows users to manage their tasks efficiently, sync tasks across devices, and maintain productivity even offline.",
+  "features": [
+    "User authentication to secure user tasks",
+    "CRUD operations for tasks (create, read, update, delete)",
+    "User task categorization",
+    "Deadline or reminder notifications",
+    "Task prioritization",
+    "Data sync across devices",
+    "Offline functionality",
+    "User profiles and settings"
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/",
+        "description": "Landing page that provides an overview of the Task Manager App and links to sign up or login.",
+        "api_routes": [],
+        "components": [
+          "Header",
+          "Footer",
+          "IntroSection"
+        ]
+      },
+      {
+        "path": "/dashboard",
+        "description": "Main task management interface where users can manage their tasks.",
+        "api_routes": [
+          "/api/tasks",
+          "/api/categories"
+        ],
+        "components": [
+          "TaskList",
+          "TaskItem",
+          "AddTaskForm",
+          "CategoryFilter",
+          "PriorityFilter",
+          "NotificationSettings"
+        ]
+      },
+      {
+        "path": "/profile",
+        "description": "User profile page displaying user information and settings.",
+        "api_routes": [
+          "/api/user"
+        ],
+        "components": [
+          "ProfileInfo",
+          "SettingsForm"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "Header",
+        "description": "Navigation bar for the application.",
+        "is_client": false
+      },
+      {
+        "name": "Footer",
+        "description": "Footer component with links to privacy policy, terms, etc.",
+        "is_client": false
+      },
+      {
+        "name": "IntroSection",
+        "description": "Component displaying the intro about the application on the landing page.",
+        "is_client": false
+      },
+      {
+        "name": "TaskList",
+        "description": "Displays a list of tasks for the current user.",
+        "is_client": true
+      },
+      {
+        "name": "TaskItem",
+        "description": "A single task item component with options to edit, delete, or mark as complete.",
+        "is_client": true
+      },
+      {
+        "name": "AddTaskForm",
+        "description": "Form to add a new task.",
+        "is_client": true
+      },
+      {
+        "name": "CategoryFilter",
+        "description": "Filter tasks by category.",
+        "is_client": true
+      },
+      {
+        "name": "PriorityFilter",
+        "description": "Filter tasks by priority.",
+        "is_client": true
+      },
+      {
+        "name": "NotificationSettings",
+        "description": "Configure reminders and notifications for tasks.",
+        "is_client": true
+      },
+      {
+        "name": "ProfileInfo",
+        "description": "Displays the user's profile information and avatar.",
+        "is_client": true
+      },
+      {
+        "name": "SettingsForm",
+        "description": "Form to update user settings (e.g., notification preferences).",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/auth/signup",
+        "method": "POST",
+        "description": "Endpoint to create a user account.",
+        "query": "Insert new user into users table and return user details."
+      },
+      {
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "Endpoint to authenticate the user and return a session token.",
+        "query": "Verify user credentials and create a session."
+      },
+      {
+        "path": "/api/auth/logout",
+        "method": "POST",
+        "description": "Endpoint to log out a user.",
+        "query": "Destroy the user's session."
+      },
+      {
+        "path": "/api/tasks",
+        "method": "GET",
+        "description": "Fetch all tasks for the authenticated user.",
+        "query": "Select tasks where user_id = auth_user"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "POST",
+        "description": "Create a new task for the authenticated user.",
+        "query": "Insert task into tasks table with foreign key user_id"
+      },
+      {
+        "path": "/api/tasks/:id",
+        "method": "PUT",
+        "description": "Update a specific task owned by the authenticated user.",
+        "query": "Update task where id = :id and user_id = auth_user"
+      },
+      {
+        "path": "/api/tasks/:id",
+        "method": "DELETE",
+        "description": "Delete a specific task owned by the authenticated user.",
+        "query": "Delete from tasks where id = :id and user_id = auth_user"
+      },
+      {
+        "path": "/api/categories",
+        "method": "GET",
+        "description": "Fetch all task categories for the authenticated user.",
+        "query": "Select categories where user_id = auth_user"
+      },
+      {
+        "path": "/api/categories",
+        "method": "POST",
+        "description": "Add a new category for sorting tasks.",
+        "query": "Insert category into categories table with foreign key user_id"
+      },
+      {
+        "path": "/api/user",
+        "method": "GET",
+        "description": "Fetch the authenticated user's profile information.",
+        "query": "Select from users where id = auth_user"
+      }
+    ],
+    "database": [
+      {
+        "name": "users",
+        "schema": "CREATE TABLE users ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), username VARCHAR(255) UNIQUE NOT NULL, email VARCHAR(255) UNIQUE NOT NULL, hashed_password VARCHAR(255) NOT NULL, profile_pic TEXT, created_at TIMESTAMP DEFAULT current_timestamp );"
+      },
+      {
+        "name": "tasks",
+        "schema": "CREATE TABLE tasks ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID REFERENCES users(id) ON DELETE CASCADE, title VARCHAR(255) NOT NULL, description TEXT, due_date TIMESTAMP, priority INTEGER, category_id UUID REFERENCES categories(id), completed BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT current_timestamp );"
+      },
+      {
+        "name": "categories",
+        "schema": "CREATE TABLE categories ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID REFERENCES users(id) ON DELETE CASCADE, name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT current_timestamp );"
+      }
+    ]
+  }
+}

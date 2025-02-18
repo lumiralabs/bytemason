@@ -53,7 +53,7 @@ Use the App Router pattern instead of the Pages Router for better organization a
 - Use `page.tsx` files to make routes publicly accessible
 - Use `layout.tsx` for shared UI between routes
 - Place route-specific components in the route folder
-- Keep shared components in `app/_components`
+- Keep shared components in `components/`
 - Use `loading.tsx` for suspense boundaries
 - Use `error.tsx` for error handling
 - Place API routes under `app/api/`
