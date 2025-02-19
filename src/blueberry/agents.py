@@ -9,8 +9,6 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from openai import OpenAI
-from codegen import Codebase
-from codegen.extensions.langchain.agent import create_codebase_agent
 
 class ProjectBuilder:
     def __init__(self):
