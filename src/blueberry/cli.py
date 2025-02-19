@@ -7,7 +7,7 @@ from rich.panel import Panel
 from rich.columns import Columns
 from rich.table import Table
 import subprocess
-from blueberry.agents import MasterAgent, CodeAgent
+from blueberry.agents import ProjectBuilder, CodeAgent
 from blueberry.models import ProjectSpec
 import asyncio
 import os
@@ -115,8 +115,8 @@ async def async_main(code: Optional[str]):
 
     # Step 1: Understand Intent
     with console.status("[bold green]Understanding your requirements...") as status:
-        agent = MasterAgent()
-        intent = agent.understand_intent(code)
+        builder = ProjectBuilder()
+        intent = builder.understand_intent(code)
     
     # Display features
     console.print("\n[bold blue]Based on your prompt, we'll build the following features:[/bold blue]")
@@ -126,12 +126,12 @@ async def async_main(code: Optional[str]):
     if not Confirm.ask("\nWould you like to modify these features?", default=False):
         console.print("[green]Using features as shown above[/green]")
     else:
-        intent = agent.verify_with_user_loop(intent)
+        intent = builder.verify_with_user_loop(intent)
     
     # Step 3: Generate Specification
     try:
         with console.status("[bold green]Generating detailed specification...") as status:
-            spec = agent.create_spec(intent)
+            spec = builder.create_spec(intent)
             status.stop()
             
         console.print("\n[bold green]✨ Specification generated successfully![/bold green]")
@@ -154,17 +154,31 @@ async def async_main(code: Optional[str]):
                     status.stop()
                     console.print(f"\n[bold green]✨ Boilerplate cloned successfully to: {project_path}[/bold green]")
                     
-                    # Initialize CodeAgent and transform the template
-                    console.print("\n[bold blue]Transforming template into your application...[/bold blue]")
-                    code_agent = CodeAgent(project_path, spec)
-                    code_agent.transform_template()
+                    # Change to project directory for all subsequent operations
+                    original_dir = os.getcwd()
+                    os.chdir(project_path)
                     
-                    # Show next steps
-                    console.print("\n[bold blue]Next steps:[/bold blue]")
-                    console.print("1. cd", project_name)
-                    console.print("2. npm install")
-                    console.print("3. Update .env.local with your Supabase credentials")
-                    console.print("4. npm run dev")
+                    try:
+                        # Set up Supabase
+                        console.print("\n[bold blue]Setting up Supabase...[/bold blue]")
+                        if not builder.setup_supabase(spec):
+                            console.print("\n[yellow]Project creation cancelled due to Supabase setup failure.[/yellow]")
+                            raise typer.Exit(1)
+                        
+                        # Initialize CodeAgent and transform the template
+                        console.print("\n[bold blue]Transforming template into your application...[/bold blue]")
+                        code_agent = CodeAgent(project_path, spec)
+                        code_agent.transform_template()
+                        
+                        # Show next steps
+                        console.print("\n[bold blue]Next steps:[/bold blue]")
+                        console.print("1. cd", project_name)
+                        console.print("2. npm install")
+                        console.print("3. npm run dev")
+                        
+                    finally:
+                        # Always restore original directory
+                        os.chdir(original_dir)
                     
                 except subprocess.CalledProcessError as e:
                     status.stop()

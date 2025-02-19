@@ -12,7 +12,7 @@ from openai import OpenAI
 from codegen import Codebase
 from codegen.extensions.langchain.agent import create_codebase_agent
 
-class MasterAgent:
+class ProjectBuilder:
     def __init__(self):
         self.client = OpenAI()
         self.console = Console()
@@ -25,7 +25,7 @@ class MasterAgent:
                 messages=[
                     {
                         "role": "system",
-                        "content": """Analyze user requests for Next.js + Supabase applications and extract core features.
+                        "content": """Analyze user requests for Next.js 14 + Supabase applications and extract core features.
                         Focus on:
                         1. Core functionality and key features
                         2. Required auth/security features
@@ -42,6 +42,7 @@ class MasterAgent:
         except Exception as e:
             raise ValueError(f"Failed to understand intent: {str(e)}")
 
+
     def validate_feature(self, feature: str) -> str:
         """Validate and enhance a single feature.
         
@@ -52,17 +53,17 @@ class MasterAgent:
             str: The validated/enhanced feature description
         """
         system_prompt = """You are an expert in writing clear, specific feature descriptions for web applications.
-Given a feature description, enhance it to be more specific and actionable.
+        Given a feature description, enhance it to be more specific and actionable.
 
-Guidelines:
-- Make it clear and specific
-- Include key functionality aspects
-- Consider security and UX implications
-- Keep it concise but complete
+        Guidelines:
+        - Make it clear and specific
+        - Include key functionality aspects
+        - Consider security and UX implications
+        - Keep it concise but complete
 
-Example Input: "User authentication"
-Example Output: "Email and social authentication with JWT tokens and password reset"
-"""
+        Example Input: "User authentication"
+        Example Output: "Email and social authentication with JWT tokens and password reset"
+        """
         
         intent = lumos.call_ai(
             messages=[
@@ -199,252 +200,38 @@ Example Output: "Email and social authentication with JWT tokens and password re
         except Exception as e:
             raise ValueError(f"Failed to create specification: {str(e)}")
 
-
-class TestAgent:
-    def __init__(self, spec):
-        self.spec = spec
-
-    def backend_serving_test(self):
+    def setup_supabase(self, spec: ProjectSpec) -> bool:
+        """Set up Supabase configuration and database for the project.
+        
+        Args:
+            spec: The project specification containing Supabase configuration
+            
+        Returns:
+            bool: True if setup was successful or user chose to continue, False if setup failed and user chose to abort
         """
-        Hits each endpoint in the backend serving spec, and verifies everything works as expected
-        """
+        try:
+            # Get credentials from spec if available
+            project_ref = getattr(spec.supabaseConfig, 'projectRef', None) if hasattr(spec, 'supabaseConfig') else None
+            anon_key = getattr(spec.supabaseConfig, 'anonKey', None) if hasattr(spec, 'supabaseConfig') else None
+            service_key = getattr(spec.supabaseConfig, 'serviceKey', None) if hasattr(spec, 'supabaseConfig') else None
+            
+            # Create Supabase agent and run setup
+            supabase_agent = SupabaseSetupAgent(spec, os.getcwd())
+            supabase_agent.setup(project_ref, anon_key, service_key)
+            return True
+            
+        except Exception as e:
+            self.console.print(f"[red]Error setting up Supabase: {str(e)}[/red]")
+            if not Confirm.ask("Would you like to continue with the rest of the implementation?"):
+                return False
+            return True
 
-        # create a test client
-        # hit each endpoint
-        # verify the response
-        # return the results
-        client = httpx.Client()
-        for endpoint in self.spec.endpoints:
-            response = client.get(endpoint)
-            assert response.status_code == 200
-            assert response.json() == {"message": "Hello, World!"}
-        pass
-
-
-# class Sandbox(BaseModel):
-#     filesystem: Any
-#     terminal: Any
-#     code_editor: Any
-
-
-#     def execute(self, code_input: str):
-#         """
-#         Executes the code commands in the terminal and returns the output
-#         """
-#         pass
-
-
-class RepairAgent:
-    def __init__(self, spec):
-        self.spec = spec
-
-    def repair(self, terminal_output: str, code_input: str):
-        """
-        Repairs the code based on the outputs of the terminal results
-        """
-        pass
 
 
 class CodeAgent:
-    def __init__(self, project_path: str, spec: ProjectSpec):
-        self.console = Console()
-        self.spec = spec
-        self.project_path = os.path.abspath(project_path)
-        
-        try:
-            self.codebase = Codebase(self.project_path)
-            self.agent = create_codebase_agent(
-                codebase=self.codebase,
-                model_name="gpt-4o",
-                temperature=0,
-                verbose=True
-            )
-            self.supabase_agent = SupabaseSetupAgent(spec, self.project_path)
-            self.console.print(f"[green]Successfully initialized CodeAgent at: {self.project_path}[/green]")
-        except Exception as e:
-            self.console.print(f"[red]Error initializing CodeAgent: {str(e)}[/red]")
-            raise
+    # TODO: Implement code generation agent
+    pass
 
-    def analyze_codebase(self) -> dict:
-        """Analyze the current codebase structure and understand its components."""
-        try:
-            analysis_result = self.agent.invoke(
-                {
-                    "input": """Analyze the current Next.js 14 codebase and provide:
-                    1. Current app router structure and pages
-                    2. Existing components and their purposes
-                    3. API routes and their functionality
-                    4. Data models and database integration
-                    5. Authentication setup if any
-                    6. Utility functions and their usage"""
-                },
-                config={"configurable": {"session_id": "analyze_codebase"}}
-            )
-            
-            self.console.print("[green]✓ Codebase analysis complete[/green]")
-            return analysis_result
-            
-        except Exception as e:
-            self.console.print(f"[red]Error analyzing codebase: {str(e)}[/red]")
-            raise
-
-    def implement_features(self) -> str:
-        """Implement features according to the project specification."""
-        try:
-            # Analyze the codebase first
-            analysis = self.analyze_codebase()
-            
-            # Read master prompt
-            with open("prompts/master_prompt.md", "r") as f:
-                master_prompt = f.read()
-            
-            # 1. First implement database and API routes
-            database_api_result = self.agent.invoke(
-                {
-                    "input": f"""Based on the codebase analysis:
-                    {analysis}
-                    
-                    Master Prompt Guidelines:
-                    {master_prompt}
-                    
-                    You are implementing the database and API routes for a Next.js 14 + Supabase application.
-                    Focus ONLY on:
-                    1. API Routes Implementation:
-                       * Create all necessary API routes in app/api/
-                       * Implement proper error handling and validation
-                       * Set up Supabase queries and database interactions
-                       * Add authentication middleware where needed
-                       * Add TypeScript types for request/response
-                    
-                    Project Structure:
-                       * API routes in app/api/
-                       * Types in types/ directory
-                       * Utils in lib/ directory
-                    
-                    Project specification to implement:
-                    {json.dumps(self.spec.model_dump(), indent=2)}
-                    
-                    Create or modify all necessary API route files."""
-                },
-                config={"configurable": {"session_id": "implement_database_api"}}
-            )
-            
-            # 2. Then implement reusable components
-            components_result = self.agent.invoke(
-                {
-                    "input": f"""Based on the previous implementation and analysis:
-                    Previous Implementation: {database_api_result}
-                    Codebase Analysis: {analysis}
-                    
-                    Master Prompt Guidelines:
-                    {master_prompt}
-                    
-                    You are implementing reusable components for a Next.js 14 + Supabase application.
-                    Focus ONLY on:
-                    1. Component Development:
-                       * Create reusable components
-                       * Use server components by default
-                       * Create client components only when needed
-                       * Implement loading and error states
-                       * Style with Tailwind CSS
-                       * Add TypeScript types and props validation
-                    
-                    Project Structure:
-                       * Components in components/ directory
-                       * Types in types/ directory
-                    
-                    Project specification to implement:
-                    {json.dumps(self.spec.model_dump(), indent=2)}
-                    
-                    Create or modify all necessary component files."""
-                },
-                config={"configurable": {"session_id": "implement_components"}}
-            )
-            
-            # 3. Finally implement pages and layouts together
-            pages_layouts_result = self.agent.invoke(
-                {
-                    "input": f"""Based on all previous implementations and analysis:
-                    API Implementation: {database_api_result}
-                    Components Implementation: {components_result}
-                    Codebase Analysis: {analysis}
-                    
-                    Master Prompt Guidelines:
-                    {master_prompt}
-                    
-                    You are implementing pages and layouts for a Next.js 14 + Supabase application.
-                    Focus on:
-                    1. Layout Implementation:
-                       * Create layout.tsx files for each section
-                       * Implement navigation structure
-                       * Set up authentication boundaries
-                       * Add error boundaries
-                       * Ensure responsive design
-                    
-                    2. Page Integration:
-                       * Create pages using existing components and APIs
-                       * Create a page.tsx file for each page in the spec
-                       * Each page should:
-                         - Import and use the relevant components
-                         - Implement data fetching from API routes
-                         - Add proper error boundaries and loading states
-                         - Include metadata exports for SEO
-                         - Follow app router conventions
-                       * Add loading.tsx and error.tsx for each route
-                       * Ensure responsive design
-                    
-                    Project Structure:
-                       * Pages and layouts in app/ directory
-                       * Use existing components from components/
-                       * Use existing API routes from app/api/
-                    
-                    Project specification to implement:
-                    {json.dumps(self.spec.model_dump(), indent=2)}
-                    
-                    Create or modify all necessary page and layout files."""
-                },
-                config={"configurable": {"session_id": "implement_pages_layouts"}}
-            )
-            
-            self.console.print("[green]✓ Features implemented successfully[/green]")
-            return "Features implemented successfully"
-            
-        except Exception as e:
-            self.console.print(f"[red]Error implementing features: {str(e)}[/red]")
-            raise
-
-    def transform_template(self) -> str:
-        """Transform the template into the final application based on spec.
-        This is the main entry point that coordinates the analysis and implementation."""
-        try:
-            # Set up Supabase first
-            try:
-                # Get credentials from spec if available
-                project_ref = getattr(self.spec.supabaseConfig, 'projectRef', None) if hasattr(self.spec, 'supabaseConfig') else None
-                anon_key = getattr(self.spec.supabaseConfig, 'anonKey', None) if hasattr(self.spec, 'supabaseConfig') else None
-                service_key = getattr(self.spec.supabaseConfig, 'serviceKey', None) if hasattr(self.spec, 'supabaseConfig') else None
-                
-                # Setup will prompt for missing credentials
-                self.supabase_agent.setup(project_ref, anon_key, service_key)
-            except Exception as e:
-                self.console.print(f"[red]Error setting up Supabase: {str(e)}[/red]")
-                if not Confirm.ask("Would you like to continue with the rest of the implementation?"):
-                    raise
-
-            # # Then analyze the codebase
-            # analysis = self.analyze_codebase()
-            # self.console.print("\n[bold]Codebase Analysis:[/bold]")
-            # self.console.print(analysis)
-
-            # Then implement the features
-            result = self.implement_features()
-            
-            self.console.print("\n[green]✓ Template transformation complete[/green]")
-            return result
-            
-        except Exception as e:
-            self.console.print(f"[red]Error transforming template: {str(e)}[/red]")
-            raise
 
 class SupabaseSetupAgent:
     def __init__(self, spec: ProjectSpec, project_path: str):

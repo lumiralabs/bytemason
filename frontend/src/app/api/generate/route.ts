@@ -12,15 +12,15 @@ interface FileStructure {
 function sanitizeRoutePath(path: string): string {
   // Convert dynamic route parameters from {param} to [param]
   // e.g., tasks/{taskId} becomes tasks/[taskId]
-  return path.replace(/\{(\w+)\}/g, '[$1]');
+  return path.replace(/\{(\w+)\}/g, "[$1]");
 }
 
 export async function POST(req: Request) {
   try {
     const { spec } = await req.json();
-    console.log('🚀 [Code Generation] Received spec:', spec);
+    console.log("🚀 [Code Generation] Received spec:", spec);
 
-    console.log('📡 [Code Generation] Making LLM call...');
+    console.log("📡 [Code Generation] Making LLM call...");
     const completion = await openai.chat.completions.create({
       model: "gpt-4-turbo-preview",
       messages: [
@@ -57,102 +57,114 @@ export async function POST(req: Request) {
             ],
             "types": "string - TypeScript type definitions",
             "utils": ["string array - utility functions"]
-          }`
+          }`,
         },
         {
           role: "user",
-          content: `Generate code for the following specification: ${JSON.stringify(spec, null, 2)}`
-        }
+          content: `Generate code for the following specification: ${JSON.stringify(
+            spec,
+            null,
+            2
+          )}`,
+        },
       ],
-      response_format: { type: "json_object" }
+      response_format: { type: "json_object" },
     });
-    console.log('✅ [Code Generation] LLM call successful');
+    console.log("✅ [Code Generation] LLM call successful");
 
     const message = completion.choices[0]?.message;
     if (!message?.content) {
-      console.error('❌ [Code Generation] No valid response');
+      console.error("❌ [Code Generation] No valid response");
       throw new Error("Failed to generate code");
     }
 
     const parsedContent = JSON.parse(message.content);
     const generatedCode = GeneratedCodeSchema.parse(parsedContent);
-    console.log('✨ [Code Generation] Validated generated code');
+    console.log("✨ [Code Generation] Validated generated code");
 
-    console.log('🔨 [Code Generation] Building file structure...');
+    console.log("🔨 [Code Generation] Building file structure...");
     // Convert the generated code into the file structure
     const files: FileStructure = {
-      'package.json': {
+      "package.json": {
         file: {
-          contents: JSON.stringify({
-            name: spec.project.name.toLowerCase().replace(/\s+/g, '-'),
-            type: 'module',
-            scripts: {
-              dev: 'next dev',
-              build: 'next build',
-              start: 'next start'
+          contents: JSON.stringify(
+            {
+              name: spec.project.name.toLowerCase().replace(/\s+/g, "-"),
+              type: "module",
+              scripts: {
+                dev: "next dev",
+                build: "next build",
+                start: "next start",
+              },
+              dependencies: {
+                next: "^14.0.0",
+                react: "^18.2.0",
+                "react-dom": "^18.2.0",
+                "@types/react": "^18.2.0",
+                "@types/react-dom": "^18.2.0",
+                typescript: "^5.0.0",
+                zod: "^3.22.0",
+              },
             },
-            dependencies: {
-              next: '^14.0.0',
-              react: '^18.2.0',
-              'react-dom': '^18.2.0',
-              '@types/react': '^18.2.0',
-              '@types/react-dom': '^18.2.0',
-              typescript: '^5.0.0',
-              'zod': '^3.22.0'
-            }
-          }, null, 2)
-        }
+            null,
+            2
+          ),
+        },
       },
-      'types': {
+      types: {
         directory: {
-          'index.ts': {
+          "index.ts": {
             file: {
-              contents: generatedCode.types
-            }
-          }
-        }
+              contents: generatedCode.types,
+            },
+          },
+        },
       },
-      'utils': {
+      utils: {
         directory: generatedCode.utils.reduce((acc, util, index) => {
           acc[`util${index + 1}.ts`] = {
-            file: { contents: util }
+            file: { contents: util },
           };
           return acc;
-        }, {} as FileStructure)
+        }, {} as FileStructure),
       },
-      'app': {
+      app: {
         directory: {
-          'api': {
+          api: {
             directory: generatedCode.apiRoutes.reduce((acc, route) => {
               // Convert {param} to [param] in route paths
-              const routePath = sanitizeRoutePath(route.path.replace('/api/', ''));
+              const routePath = sanitizeRoutePath(
+                route.path.replace("/api/", "")
+              );
               const routeMethods = Object.entries(route.methods)
-                .map(([method, { code }]) => `
+                .map(
+                  ([method, { code }]) => `
 export async function ${method}(request: Request) {
 ${code}
-}`)
-                .join('\n\n');
-              
+}`
+                )
+                .join("\n\n");
+
               if (routeMethods) {
                 // Create nested directories for the route path
-                const pathParts = routePath.split('/');
+                const pathParts = routePath.split("/");
                 let currentPath = acc;
-                
+
                 // Create directories for each path segment
                 pathParts.forEach((part, index) => {
                   if (index === pathParts.length - 1) {
                     // Last part - create route.ts file
                     currentPath[part] = {
                       directory: {
-                        'route.ts': {
+                        "route.ts": {
                           file: {
                             contents: `
 import { NextResponse } from 'next/server';
 ${routeMethods}
-`
-                          }
-                        }
-                      }
+`,
+                          },
+                        },
+                      },
                     };
                   } else {
                     // Create intermediate directory
@@ -164,43 +176,45 @@ ${routeMethods}
                 });
               }
               return acc;
-            }, {} as FileStructure)
+            }, {} as FileStructure),
           },
-          'page.tsx': {
+          "page.tsx": {
             file: {
               contents: `
-import { ${generatedCode.components.map(c => c.name).join(', ')} } from '@/components';
+import { ${generatedCode.components
+                .map((c) => c.name)
+                .join(", ")} } from '@/components';
 
 export default function Home() {
   return (
     <main className="min-h-screen p-8">
       <h1 className="text-3xl font-bold mb-8">${spec.project.name}</h1>
-      ${generatedCode.components.map(c => `<${c.name} />`).join('\n      ')}
+      ${generatedCode.components.map((c) => `<${c.name} />`).join("\n      ")}
     </main>
   );
-}`
-            }
-          }
-        }
+}`,
+            },
+          },
+        },
       },
-      'components': {
+      components: {
         directory: generatedCode.components.reduce((acc, component) => {
           acc[`${component.name}.tsx`] = {
-            file: { contents: component.code }
+            file: { contents: component.code },
           };
           return acc;
-        }, {} as FileStructure)
-      }
+        }, {} as FileStructure),
+      },
     };
 
-    console.log('🎉 [Code Generation] Successfully generated file structure');
-    console.log('📁 [Code Generation] Generated files:', Object.keys(files));
+    console.log("🎉 [Code Generation] Successfully generated file structure");
+    console.log("📁 [Code Generation] Generated files:", Object.keys(files));
     return NextResponse.json(files);
   } catch (error) {
-    console.error('💥 [Code Generation] Error:', error);
+    console.error("💥 [Code Generation] Error:", error);
     return NextResponse.json(
-      { error: 'Failed to generate code. Please try again.' },
+      { error: "Failed to generate code. Please try again." },
       { status: 500 }
     );
   }
-} 
+}
