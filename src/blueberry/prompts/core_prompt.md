@@ -354,4 +354,19 @@ export default function Login() {
 }
 ```
 
+### 5. Environment Variables
+
+The environment variables should be stored in the `.env.local` file.
+
+```typescript
+// .env.local
+
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+```
+
+
+
 Always use the most latest nextJS 14 app router conventions in all cases, weather imports and exports,folder structure, api structure, etc.
