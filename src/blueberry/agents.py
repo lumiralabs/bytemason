@@ -7,19 +7,15 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from openai import OpenAI
-
 
 class ProjectBuilder:
     def __init__(self):
-        self.client = OpenAI()
         self.console = Console()
 
     def understand_intent(self, user_input: str) -> Intent:
         """Understand the user's intent from the user's input."""
         try:
-            completion = self.client.beta.chat.completions.parse(
-                model="gpt-4o",
+            intent = lumos.call_ai(
                 messages=[
                     {
                         "role": "system",
@@ -28,14 +24,17 @@ class ProjectBuilder:
                         1. Core functionality and key features
                         2. Required auth/security features
                         3. Essential data models
-                        4. Critical API endpoints"""
+                        4. Critical API endpoints
+                        5. Keep it simple and practical, dont add any fancy features.
+                        """
                     },
                     {"role": "user", "content": user_input}
                 ],
-                response_format=Intent
+                response_format=Intent,
+                model="gpt-4o-mini",
             )
             
-            return completion.choices[0].message.parsed
+            return intent
             
         except Exception as e:
             raise ValueError(f"Failed to understand intent: {str(e)}")
@@ -75,7 +74,7 @@ class ProjectBuilder:
             model="gpt-4o-mini",
         )
         
-        return intent.features[0] if intent.features else feature
+        return feature
 
     def verify_with_user_loop(self, intent: Intent, max_attempts=3) -> Intent:
         """Verify the intent with the user, iterate with feedback and returns the final intent.
@@ -155,24 +154,33 @@ class ProjectBuilder:
     def create_spec(self, intent: Intent) -> ProjectSpec:
         """Create a detailed project specification based on the intent and save it to a file."""
         try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            prompt_path = os.path.join(current_dir, "prompts", "core_prompt.md")
+            
+            with open(prompt_path, 'r') as f:
+                core_prompt = f.read()
+
             spec = lumos.call_ai(
                 messages=[
                     {
                         "role": "system",
-                        "content": """Generate a detailed specification for a Next.js 14 + Supabase application.
+                        "content": f"""Generate a detailed specification for a Next.js 14 App router + Supabase application.
+
+                        You currently have a boilerplate with all the basic setup done, you just need to add the features requested by the user.
+                        {core_prompt}
+
                         Include:
-                        1. React components with clear purposes
-                        2. API routes with methods and auth requirements
-                        3. Database tables with columns and relationships
-                        4. Required environment variables
-                        5. Pages with:
+                        1. components with clear purposes
+                        2. API routes for all the operations needed
+                        3. Postgres database tables with columns and relationships
+                        4. Pages with:
                            - Full paths (e.g. /dashboard, /profile)
                            - Associated API routes needed
                            - Required components
                            - Auth requirements
                            
                         
-                        Keep the specification focused and practical."""
+                        Keep the specification simple and practical. Dont add any fancy features. """
                     },
                     {
                         "role": "user",
@@ -235,14 +243,12 @@ class SupabaseSetupAgent:
     def __init__(self, spec: ProjectSpec, project_path: str):
         self.spec = spec
         self.project_path = project_path
-        self.client = OpenAI()
         self.console = Console()
         
     def get_migration_sql(self) -> str:
         """Generate SQL migration based on the spec"""
         try:
-            completion = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+            migrations = lumos.call_ai(
                 messages=[
                     {
                         "role": "system",
@@ -261,9 +267,10 @@ class SupabaseSetupAgent:
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}"
                     }
                 ],
-                timeout=30
+                response_format=str,
+                model="gpt-4o-mini",
             )
-            return completion.choices[0].message.content
+            return migrations
         except Exception as e:
             self.console.print(f"[red]Failed to generate SQL migration: {e}[/red]")
             raise
@@ -363,9 +370,9 @@ class SupabaseSetupAgent:
         try:
             env_path = Path(self.project_path) / ".env.local"
             env_content = f"""NEXT_PUBLIC_SUPABASE_URL=https://{project_ref}.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
-SUPABASE_SERVICE_ROLE_KEY={service_key}
-"""
+                NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
+                SUPABASE_SERVICE_ROLE_KEY={service_key}
+                """
             env_path.write_text(env_content)
             self.console.print("[green]✅ Environment variables set up successfully[/green]")
             
