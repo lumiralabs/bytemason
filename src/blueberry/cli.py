@@ -168,7 +168,7 @@ async def async_main(code: Optional[str]):
                         # Initialize CodeAgent and transform the template
                         console.print("\n[bold blue]Transforming template into your application...[/bold blue]")
                         code_agent = CodeAgent(project_path, spec)
-                        code_agent.transform_template()
+                        await code_agent.transform_template()
                         
                         # Show next steps
                         console.print("\n[bold blue]Next steps:[/bold blue]")
