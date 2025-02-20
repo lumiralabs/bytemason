@@ -7,6 +7,7 @@ STRICTLY FOLLOW THESE GUIDELINES. DO NOT USE ANY OTHER OLD PATTERNS.
 Use the App Router pattern instead of the Pages Router for better organization and features:
 
 - Place all routes under `app/` directory instead of `pages/`
+- components should always be in `components/` folder and not in the `app/components` folder
 - Create route segments using folders (e.g. `app/dashboard/settings/`)
 - Use `page.tsx` files to make routes publicly accessible
 - Use `layout.tsx` for shared UI between routes
@@ -18,7 +19,7 @@ Use the App Router pattern instead of the Pages Router for better organization a
 
 ## Project Structure DOs and DON'Ts
 
-✅ DO:
+✅ DO example:
 ├── app/
 │ ├── (auth)/ # Auth group routes
 │ │ ├── login/
@@ -39,7 +40,7 @@ Use the App Router pattern instead of the Pages Router for better organization a
 ├── Button.tsx
 └── Header.tsx
 
-❌ DON'T:
+❌ DON'T example:
 └── pages/ # Don't use Pages Router
 ├── \_app.tsx
 ├── index.tsx
@@ -148,6 +149,32 @@ Use the App Router pattern instead of the Pages Router for better organization a
 
 The components are organized in a `components` directory, with specific components like buttons and layout components. This suggests a pattern of reusable UI components, which is common in React applications to promote reusability and maintainability.
 
+we have a components.json in root which contains component info adn aliases for them. use these aliases to import components.
+
+```typescript
+// components.json
+
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "tailwind.config.js",
+    "css": "app/globals.css",
+    "baseColor": "zinc",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  }
+}
+```
 ### 3. Current Routing Implementation
 
 The `app` directory structure suggests the use of Next.js 14 App Router, where each subdirectory or file represents a route. For example, `app/dashboard` and `app/signin` likely correspond to `/dashboard` and `/signin` routes, respectively.
@@ -369,4 +396,4 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 
 
-Always use the most latest nextJS 14 app router conventions in all cases, weather imports and exports,folder structure, api structure, etc.
+Always use the most latest nextJS 14 app router conventions in all cases weather imports and exports,folder structure, api structure, etc.

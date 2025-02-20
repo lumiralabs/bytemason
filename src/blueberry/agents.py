@@ -322,6 +322,13 @@ class CodeAgent:
         """Generate code with structured output format"""
         core_prompt = (self.current_dir / "prompts" / "core_prompt.md").read_text()
         
+        # Read existing migration file if it exists
+        migration_file = self.project_path / "supabase" / "migrations"
+        migration_sql = ""
+        for file in migration_file.glob("*_initial_schema.sql"):
+            migration_sql = file.read_text()
+            break  # Take the first matching file
+        
         prompt = f"""Based on the following project specification, generate or modify files for a Next.js 14 application.
         The application already has a basic structure with auth and Supabase integration.
         
@@ -331,10 +338,20 @@ class CodeAgent:
         Existing files structure:
         {self._get_files_structure()}
         
+        Database Schema (Supabase):
+        ```sql
+        {migration_sql}
+        ```
+        
         Boilerplate Context:
         {core_prompt}
         
-        Generate only the necessary new files or modifications to existing files.
+        Generate all the necessary new files (components, pages, api routes) or modifications to existing files.
+        Make sure to:
+        1. Use the exact table names and columns from the SQL schema
+        2. Follow the database relationships defined in migrations
+        3. Include proper type definitions for database tables
+        4. Add proper error handling for database operations
         Do not regenerate unchanged boilerplate files.
         """
 
@@ -423,59 +440,103 @@ class CodeAgent:
             self.console.print(f"[red]Build process failed: {str(e)}[/red]")
             return []
 
+    def _compile_error_patterns(self) -> dict:
+        """Compile regex patterns for error parsing"""
+        return {
+            'typescript': re.compile(
+                r'(?P<file>.*?)\((?P<line>\d+),(?P<column>\d+)\).*?: (?P<message>.*?)(?:\s+\((?P<code>TS\d+)\))?$'
+            ),
+            'module': re.compile(
+                r"Cannot find module '(?P<module>[^']+)' from '(?P<file>[^']+)'"
+            ),
+            'import': re.compile(
+                r"(?P<message>Import .+?) in (?P<file>.+?):(?P<line>\d+):(?P<column>\d+)"
+            ),
+            'nextjs': re.compile(
+                r"(?:Error|error).*?: (?P<message>.+?)\s+Location: (?P<file>.+?):(?P<line>\d+):(?P<column>\d+)"
+            ),
+            'webpack': re.compile(
+                r"Module build failed \(.*?\):\s*(?P<file>[^:]+):(?P<line>\d+):(?P<column>\d+)\s*(?P<message>.+)"
+            ),
+            'eslint': re.compile(
+                r"(?P<file>[^:]+):(?P<line>\d+):(?P<column>\d+) - (?P<message>.+?) \[(?P<code>.+?)\]"
+            )
+        }
+
     def _parse_build_errors(self, output: str) -> List[BuildError]:
         """Parse build errors into structured format"""
         errors = []
         patterns = self._compile_error_patterns()
         
-        for line in output.splitlines():
+        # Split output into lines and process each line
+        lines = output.splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            
+            # Try to find a file path in the line
+            file_path_match = re.search(r'(?:\.\/|[a-zA-Z]:\\|\/)?(?:[\w\-. /\\]+\/)*([\w\-. ]+\.[a-zA-Z]+)', line)
+            
+            # Look for error patterns
+            error_found = False
             for error_type, pattern in patterns.items():
                 if match := pattern.search(line):
                     error_data = match.groupdict()
+                    
+                    # If file wasn't found in the pattern but we found one in the line
+                    if error_data.get('file') == 'unknown' and file_path_match:
+                        error_data['file'] = file_path_match.group(0)
+                    
+                    # Clean up the file path
+                    if 'file' in error_data and error_data['file']:
+                        error_data['file'] = error_data['file'].replace('\\', '/').strip()
+                        # Remove ./ or / from the start of the path
+                        error_data['file'] = re.sub(r'^\.?/', '', error_data['file'])
+                    
                     errors.append(BuildError(
                         file=error_data.get('file', 'unknown'),
-                        message=error_data.get('message', line),
+                        message=error_data.get('message', line).strip(),
                         type=error_type,
                         line=int(error_data.get('line', 0)),
                         column=int(error_data.get('column', 0)),
                         code=error_data.get('code', '')
                     ))
+                    error_found = True
                     break
             
-            # Catch unmatched errors as generic errors
-            if not any(pattern.search(line) for pattern in patterns.values()):
-                if 'Error:' in line or 'error' in line.lower():
+            # If no pattern matched but line contains error-like content
+            if not error_found and ('Error:' in line or 'error' in line.lower()):
+                # Look ahead a few lines for a file path
+                for j in range(i + 1, min(i + 4, len(lines))):
+                    file_path_match = re.search(r'(?:\.\/|[a-zA-Z]:\\|\/)?(?:[\w\-. /\\]+\/)*([\w\-. ]+\.[a-zA-Z]+)', lines[j])
+                    if file_path_match:
+                        file_path = file_path_match.group(0).replace('\\', '/').strip()
+                        file_path = re.sub(r'^\.?/', '', file_path)
+                        errors.append(BuildError(
+                            file=file_path,
+                            message=line.strip(),
+                            type='generic',
+                            line=0,
+                            column=0,
+                            code=''
+                        ))
+                        error_found = True
+                        break
+                
+                # If still no file path found, add as unknown
+                if not error_found:
                     errors.append(BuildError(
                         file='unknown',
-                        message=line,
+                        message=line.strip(),
                         type='generic',
                         line=0,
                         column=0,
                         code=''
                     ))
+            
+            i += 1
         
         return errors
-
-    def _compile_error_patterns(self) -> dict:
-        """Compile regex patterns for error parsing"""
-        return {
-            'typescript': re.compile(
-                r'(?P<file>[^:]+):(?P<line>\d+):(?P<column>\d+) - '
-                r'error (?P<code>TS\d+): (?P<message>.+)'
-            ),
-            'module': re.compile(
-                r"Cannot find module '(?P<module>[^']+)'"
-            ),
-            'syntax': re.compile(
-                r'(?P<file>[^:]+): (?P<message>Unexpected token.+) \((?P<line>\d+):(?P<column>\d+)\)'
-            ),
-            'type': re.compile(
-                r'Type error: (?P<message>.+) in (?P<file>[^:]+):(?P<line>\d+)'
-            ),
-            'import': re.compile(
-                r"Import error: (?P<message>.+) in (?P<file>.+)"
-            )
-        }
 
     async def _repair_code(self, errors: List[BuildError]):
         """Fix build errors using AI"""
@@ -550,7 +611,7 @@ class SupabaseSetupAgent:
                         "content": """Generate a complete pgsql migration for Supabase based on the specification.
                         Include:
                         1. Table creation with proper types and constraints
-                        2. Functions and triggers if any
+                        2. Functions and triggers for linking auth.users to the users table
                         3. Indexes if any
                         4. Initial seed data if needed
                         5. Do not include any RLS policies
@@ -572,15 +633,28 @@ class SupabaseSetupAgent:
     def apply_migration(self, project_ref: str, anon_key: str, service_key: str) -> None:
         """Apply migration to Supabase project"""
         try:
+            # Generate migration SQL first
+            migration_sql = self.get_migration_sql()
+            
+            # Create migrations directory
+            migrations_dir = Path(self.project_path) / "supabase" / "migrations"
+            migrations_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Write migration file with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
+            migration_file.write_text(migration_sql)
+            
             # Check for Supabase CLI
-            subprocess.run(["npx", "supabase", "--version"], check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            self.console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
-            subprocess.run(
-                ["npm", "install", "supabase", "--save-dev"],
-                cwd=self.project_path,
-                check=True,
-            )
+            try:
+                subprocess.run(["npx", "supabase", "--version"], check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                self.console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
+                subprocess.run(
+                    ["npm", "install", "supabase", "--save-dev"],
+                    cwd=self.project_path,
+                    check=True,
+                )
 
             # Extract project ref from URL if provided
             clean_project_ref = project_ref
@@ -591,68 +665,54 @@ class SupabaseSetupAgent:
             if not clean_project_ref.isalnum() or len(clean_project_ref) != 20:
                 raise Exception("Invalid project ref format. Must be a 20-character alphanumeric string.")
 
-            # Generate migration SQL
-            migration_sql = self.get_migration_sql()
+            # Check for config file
+            config_file = Path(self.project_path) / "supabase" / "config.toml"
             
-            # Set up project structure
-            supabase_dir = Path(self.project_path) / "supabase"
-            migrations_dir = supabase_dir / "migrations"
-            config_file = supabase_dir / "config.toml"
-            
-            # Create directories
-            migrations_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Write migration file
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
-            migration_file.write_text(migration_sql)
-
-            try:
-                # Initialize Supabase project if not already initialized
-                if not config_file.exists():
-                    self.console.print("[yellow]Initializing Supabase project...[/yellow]")
-                    subprocess.run(
-                        ["npx", "supabase", "init"],
-                        cwd=self.project_path,
-                        check=True,
-                    )
-
-                # Login to Supabase
-                self.console.print("[yellow]Logging in to Supabase...[/yellow]")
+            # Initialize Supabase project if not already initialized
+            if not config_file.exists():
+                self.console.print("[yellow]Initializing Supabase project...[/yellow]")
                 subprocess.run(
-                    ["npx", "supabase", "login"],
+                    ["npx", "supabase", "init"],
                     cwd=self.project_path,
                     check=True,
                 )
 
-                # Link to remote project using the cleaned project ref
-                self.console.print(f"[yellow]Linking to Supabase project: {clean_project_ref}[/yellow]")
-                subprocess.run(
-                    [
-                        "npx", "supabase", "link", 
-                        "--project-ref", clean_project_ref,
-                        "--password", "",
-                        "--debug"
-                    ],
-                    cwd=self.project_path,
-                    check=True,
-                )
-                
-                # Push the migration
-                self.console.print("[yellow]Pushing migration to remote database...[/yellow]")
-                subprocess.run(
-                    ["npx", "supabase", "db", "push"],
-                    cwd=self.project_path,
-                    check=True,
-                )
-                
-                self.console.print("[green]✅ Migration applied successfully[/green]")
-                
-            except subprocess.TimeoutExpired:
-                raise Exception("Operation timed out while applying migration")
-            except subprocess.CalledProcessError as e:
-                error_msg = e.stderr if e.stderr else str(e)
-                raise Exception(f"Migration failed: {error_msg}")
+            # Login to Supabase
+            self.console.print("[yellow]Logging in to Supabase...[/yellow]")
+            subprocess.run(
+                ["npx", "supabase", "login"],
+                cwd=self.project_path,
+                check=True,
+            )
+
+            # Link to remote project
+            self.console.print(f"[yellow]Linking to Supabase project: {clean_project_ref}[/yellow]")
+            subprocess.run(
+                [
+                    "npx", "supabase", "link", 
+                    "--project-ref", clean_project_ref,
+                    "--password", "",
+                    "--debug"
+                ],
+                cwd=self.project_path,
+                check=True,
+            )
+            
+            # Push the migration
+            self.console.print("[yellow]Pushing migration to remote database...[/yellow]")
+            subprocess.run(
+                ["npx", "supabase", "db", "push"],
+                cwd=self.project_path,
+                check=True,
+            )
+            
+            self.console.print("[green]✅ Migration applied successfully[/green]")
+            
+        except subprocess.TimeoutExpired:
+            raise Exception("Operation timed out while applying migration")
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else str(e)
+            raise Exception(f"Migration failed: {error_msg}")
 
     def setup_environment(self, project_ref: str, anon_key: str, service_key: str) -> None:
         """Set up environment variables for Supabase"""
