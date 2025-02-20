@@ -1,0 +1,179 @@
+{
+  "name": "Task Management App",
+  "description": "A task management application using Next.js 14 and Supabase.",
+  "features": [
+    "User authentication with Supabase Auth",
+    "CRUD operations for tasks (Create, Read, Update, Delete)",
+    "User-specific task lists to ensure privacy and personalization",
+    "Real-time updates using Supabase's subscription features",
+    "Ability to categorize tasks",
+    "Task prioritization and due dates",
+    "User-friendly interface with Next.js pages and components",
+    "Responsive design for mobile and desktop"
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/login",
+        "description": "User login page.",
+        "api_routes": [
+          "/api/auth/login"
+        ],
+        "components": [
+          "LoginForm"
+        ]
+      },
+      {
+        "path": "/signup",
+        "description": "User signup page.",
+        "api_routes": [
+          "/api/auth/signup"
+        ],
+        "components": [
+          "SignupForm"
+        ]
+      },
+      {
+        "path": "/dashboard",
+        "description": "User's dashboard displaying task list.",
+        "api_routes": [
+          "/api/tasks",
+          "/api/auth/user"
+        ],
+        "components": [
+          "TaskList",
+          "TaskItem",
+          "Header",
+          "Sidebar"
+        ]
+      },
+      {
+        "path": "/tasks/add",
+        "description": "Page to add a new task.",
+        "api_routes": [
+          "/api/tasks"
+        ],
+        "components": [
+          "TaskForm",
+          "Header",
+          "Sidebar"
+        ]
+      },
+      {
+        "path": "/tasks/[id]/edit",
+        "description": "Page to edit an existing task.",
+        "api_routes": [
+          "/api/tasks/[id]"
+        ],
+        "components": [
+          "TaskForm",
+          "Header",
+          "Sidebar"
+        ]
+      },
+      {
+        "path": "/profile",
+        "description": "User profile page for managing account details.",
+        "api_routes": [
+          "/api/auth/user",
+          "/api/auth/logout"
+        ],
+        "components": [
+          "ProfileForm",
+          "Header",
+          "Sidebar"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "LoginForm",
+        "description": "Handles user login input and submission.",
+        "is_client": true
+      },
+      {
+        "name": "SignupForm",
+        "description": "Handles user signup input and submission.",
+        "is_client": true
+      },
+      {
+        "name": "TaskList",
+        "description": "Displays a list of user's tasks.",
+        "is_client": true
+      },
+      {
+        "name": "TaskItem",
+        "description": "Displays individual task details.",
+        "is_client": true
+      },
+      {
+        "name": "TaskForm",
+        "description": "Handles task creation and editing input.",
+        "is_client": true
+      },
+      {
+        "name": "Header",
+        "description": "Displays navigation header.",
+        "is_client": true
+      },
+      {
+        "name": "Sidebar",
+        "description": "Displays navigation sidebar with links.",
+        "is_client": true
+      },
+      {
+        "name": "ProfileForm",
+        "description": "Handles profile information updates.",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/auth/login",
+        "method": "POST",
+        "description": "Logs user in and returns a session.",
+        "query": "Call Supabase Auth signIn method"
+      },
+      {
+        "path": "/api/auth/signup",
+        "method": "POST",
+        "description": "Registers a new user and returns session.",
+        "query": "Call Supabase Auth signUp method"
+      },
+      {
+        "path": "/api/auth/user",
+        "method": "GET",
+        "description": "Fetches authenticated user's data.",
+        "query": "Call Supabase Auth getUser method"
+      },
+      {
+        "path": "/api/auth/logout",
+        "method": "POST",
+        "description": "Logs user out and removes session.",
+        "query": "Call Supabase Auth signOut method"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "GET, POST",
+        "description": "Fetches user's tasks or creates a new task.",
+        "query": "Select tasks where user_id = auth user id"
+      },
+      {
+        "path": "/api/tasks/[id]",
+        "method": "GET, PUT, DELETE",
+        "description": "Handles fetching, updating, or deleting a specific task by ID.",
+        "query": "Select task by id; Filter where user_id = auth user id"
+      }
+    ],
+    "database": [
+      {
+        "name": "users",
+        "schema": "CREATE TABLE users (id UUID PRIMARY KEY, email TEXT UNIQUE, password TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+      },
+      {
+        "name": "tasks",
+        "schema": "CREATE TABLE tasks (id UUID PRIMARY KEY, user_id UUID REFERENCES users(id), title TEXT, description TEXT, category TEXT, priority INTEGER, due_date TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+      }
+    ]
+  }
+}

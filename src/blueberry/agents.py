@@ -1,6 +1,5 @@
 from lumos import lumos
 from blueberry.models import Intent, ProjectSpec
-import httpx
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 import json
@@ -9,8 +8,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from openai import OpenAI
-from codegen import Codebase
-from codegen.extensions.langchain.agent import create_codebase_agent
+
 
 class ProjectBuilder:
     def __init__(self):

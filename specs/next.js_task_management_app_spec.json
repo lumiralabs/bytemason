@@ -1,0 +1,200 @@
+{
+  "name": "Next.js Task Management App",
+  "description": "A full-featured task management application built using Next.js and Supabase to facilitate efficient task management and user collaboration.",
+  "features": [
+    "Task Management: Create, update, delete, and view tasks or to-do items.",
+    "User Authentication: Secure login and logout functionalities for users.",
+    "Task Categorization: Ability to categorize tasks by projects or labels.",
+    "Due Dates and Reminders: Assign due dates to tasks and set reminders or notifications.",
+    "Task Prioritization: Option to mark tasks with different priority levels (e.g., high, medium, low).",
+    "Real-time Updates: Synchronize task changes across multiple devices in real-time.",
+    "Collaboration: Share lists with other users and assign tasks to specific people.",
+    "Activity Logs: Track changes and activity logs for auditing and efficiency.",
+    "Responsive Design: Ensure usability across various devices including mobile and desktop.",
+    "Search and Filtering: Implement search functionality and filtering options to easily find tasks."
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/",
+        "description": "Landing page with app description and call-to-action for login/signup.",
+        "api_routes": [],
+        "components": [
+          "Header",
+          "Footer",
+          "AuthForm"
+        ]
+      },
+      {
+        "path": "/dashboard",
+        "description": "Main dashboard displaying user's tasks grouped by categories with real-time updates.",
+        "api_routes": [
+          "/api/tasks",
+          "/api/projects",
+          "/api/user"
+        ],
+        "components": [
+          "Header",
+          "TaskList",
+          "TaskForm",
+          "Sidebar",
+          "Footer"
+        ]
+      },
+      {
+        "path": "/profile",
+        "description": "User account management page.",
+        "api_routes": [
+          "/api/user"
+        ],
+        "components": [
+          "Header",
+          "ProfileForm",
+          "Footer"
+        ]
+      },
+      {
+        "path": "/task/[id]",
+        "description": "Detailed view of a single task allowing editing and collaboration options.",
+        "api_routes": [
+          "/api/task/[id]"
+        ],
+        "components": [
+          "Header",
+          "TaskDetail",
+          "Comments",
+          "Footer"
+        ]
+      },
+      {
+        "path": "/project/[id]",
+        "description": "Tasks under a specific project, with options for adding/editing tasks.",
+        "api_routes": [
+          "/api/project/[id]"
+        ],
+        "components": [
+          "Header",
+          "ProjectDetail",
+          "TaskList",
+          "Footer"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "Header",
+        "description": "The app's navigation bar containing links to various parts of the app.",
+        "is_client": true
+      },
+      {
+        "name": "Footer",
+        "description": "Footer containing additional links and information.",
+        "is_client": false
+      },
+      {
+        "name": "AuthForm",
+        "description": "Component for login and signup forms.",
+        "is_client": true
+      },
+      {
+        "name": "TaskList",
+        "description": "Displays a list of tasks with filters and search functionality.",
+        "is_client": true
+      },
+      {
+        "name": "TaskForm",
+        "description": "Form to add or edit tasks.",
+        "is_client": true
+      },
+      {
+        "name": "Sidebar",
+        "description": "Sidebar for navigating different sections of the dashboard like tasks, projects, and settings.",
+        "is_client": true
+      },
+      {
+        "name": "ProfileForm",
+        "description": "Form to edit user account details.",
+        "is_client": true
+      },
+      {
+        "name": "TaskDetail",
+        "description": "Detailed view and edit options for a specific task.",
+        "is_client": true
+      },
+      {
+        "name": "Comments",
+        "description": "Section for users to add and view comments on a task.",
+        "is_client": true
+      },
+      {
+        "name": "ProjectDetail",
+        "description": "Displays details of a specific project including associated tasks.",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/tasks",
+        "method": "GET",
+        "description": "Fetches tasks for the logged-in user with real-time capabilities.",
+        "query": "SELECT * FROM tasks WHERE user_id = auth.user_id() AND completed = FALSE"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "POST",
+        "description": "Creates a new task.",
+        "query": "INSERT INTO tasks (title, description, due_date, priority, project_id, user_id) VALUES ($1, $2, $3, $4, $5, auth.user_id()) RETURNING id"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "PUT",
+        "description": "Updates an existing task.",
+        "query": "UPDATE tasks SET title = $1, description = $2, due_date = $3, priority = $4, project_id = $5 WHERE id = $6 AND user_id = auth.user_id()"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "DELETE",
+        "description": "Deletes a task.",
+        "query": "DELETE FROM tasks WHERE id = $1 AND user_id = auth.user_id()"
+      },
+      {
+        "path": "/api/projects",
+        "method": "GET",
+        "description": "Fetches all projects the user is part of.",
+        "query": "SELECT * FROM projects WHERE user_id = auth.user_id()"
+      },
+      {
+        "path": "/api/task/[id]",
+        "method": "GET",
+        "description": "Fetches details for a specific task.",
+        "query": "SELECT * FROM tasks WHERE id = $1 AND user_id = auth.user_id()"
+      },
+      {
+        "path": "/api/project/[id]",
+        "method": "GET",
+        "description": "Fetches details for a specific project, including associated tasks.",
+        "query": "SELECT * FROM projects JOIN tasks ON projects.id = tasks.project_id WHERE projects.id = $1 AND projects.user_id = auth.user_id()"
+      },
+      {
+        "path": "/api/user",
+        "method": "GET",
+        "description": "Fetches details of the logged-in user.",
+        "query": "SELECT * FROM users WHERE id = auth.user_id()"
+      }
+    ],
+    "database": [
+      {
+        "name": "users",
+        "schema": "CREATE TABLE users (id UUID PRIMARY KEY, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())"
+      },
+      {
+        "name": "tasks",
+        "schema": "CREATE TABLE tasks (id SERIAL PRIMARY KEY, title TEXT NOT NULL, description TEXT, due_date DATE, priority TEXT CHECK(priority IN ('high', 'medium', 'low')), user_id UUID REFERENCES users(id), project_id INTEGER REFERENCES projects(id), created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())"
+      },
+      {
+        "name": "projects",
+        "schema": "CREATE TABLE projects (id SERIAL PRIMARY KEY, name TEXT NOT NULL, user_id UUID REFERENCES users(id), created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())"
+      }
+    ]
+  }
+}
