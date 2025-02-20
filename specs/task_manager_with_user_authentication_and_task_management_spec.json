@@ -1,0 +1,99 @@
+{
+  "name": "Task Manager with User Authentication and Task Management",
+  "description": "A Next.js 14 app with Supabase integration for managing user-specific tasks. Users can authenticate, create, manage, and filter tasks by completion status.",
+  "features": [
+    "User authentication",
+    "CRUD (Create, Read, Update, Delete) tasks",
+    "Task completion status (active/completed)",
+    "User-specific task list",
+    "Filtering tasks by status (all, active, completed)",
+    "Basic UI for displaying tasks and input forms"
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/",
+        "description": "Home page redirects to /tasks if authenticated, otherwise to /signin.",
+        "api_routes": [],
+        "components": []
+      },
+      {
+        "path": "/signin",
+        "description": "User authentication page using Supabase.",
+        "api_routes": [],
+        "components": [
+          "LoginPage"
+        ]
+      },
+      {
+        "path": "/tasks",
+        "description": "Displays the list of user-specific tasks. Users can create, update, delete, and filter tasks based on their status (active/completed).",
+        "api_routes": [
+          "GET /api/tasks",
+          "POST /api/tasks",
+          "PUT /api/tasks/:id",
+          "DELETE /api/tasks/:id"
+        ],
+        "components": [
+          "TaskList",
+          "TaskForm",
+          "FilterTasks"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "LoginPage",
+        "description": "Handles user login using Supabase magic link and OAuth.",
+        "is_client": true
+      },
+      {
+        "name": "TaskList",
+        "description": "Displays a list of tasks for the authenticated user.",
+        "is_client": true
+      },
+      {
+        "name": "TaskForm",
+        "description": "Form for creating and updating tasks.",
+        "is_client": true
+      },
+      {
+        "name": "FilterTasks",
+        "description": "Component to filter tasks by status (all, active, completed).",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/tasks",
+        "method": "GET",
+        "description": "Fetches all tasks of the authenticated user.",
+        "query": "SELECT * FROM tasks WHERE user_id = auth.uid()"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "POST",
+        "description": "Creates a new task for the authenticated user.",
+        "query": "INSERT INTO tasks (user_id, description, status) VALUES (auth.uid(), $1, 'active')"
+      },
+      {
+        "path": "/api/tasks/:id",
+        "method": "PUT",
+        "description": "Updates an existing task (description or status) for the authenticated user.",
+        "query": "UPDATE tasks SET description = $1, status = $2 WHERE id = $3 AND user_id = auth.uid()"
+      },
+      {
+        "path": "/api/tasks/:id",
+        "method": "DELETE",
+        "description": "Deletes a task for the authenticated user.",
+        "query": "DELETE FROM tasks WHERE id = $1 AND user_id = auth.uid()"
+      }
+    ],
+    "database": [
+      {
+        "name": "tasks",
+        "schema": "CREATE TABLE tasks (id serial PRIMARY KEY, user_id uuid REFERENCES users(id), description text NOT NULL, status text CHECK (status IN ('active', 'completed')) NOT NULL DEFAULT 'active', created_at timestamptz NOT NULL DEFAULT NOW())"
+      }
+    ]
+  }
+}

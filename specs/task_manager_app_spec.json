@@ -1,0 +1,136 @@
+{
+  "name": "Task Manager App",
+  "description": "A task management application with user authentication and task CRUD operations.",
+  "features": [
+    "User authentication (sign up, log in, log out)",
+    "Create, read, update and delete (CRUD) tasks",
+    "Mark tasks as completed or pending",
+    "Filter tasks (by completed/pending status)",
+    "Sort tasks (by due date or creation date)",
+    "User-specific task storage (each user sees only their own tasks)"
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/dashboard",
+        "description": "User's main dashboard showing task list, with options for creating, updating, and deleting tasks.",
+        "api_routes": [
+          "/api/tasks",
+          "/api/tasks/:id"
+        ],
+        "components": [
+          "TaskList",
+          "TaskItem",
+          "TaskFilter",
+          "TaskSorter",
+          "TaskCreator"
+        ]
+      },
+      {
+        "path": "/login",
+        "description": "User login page using Supabase authentication.",
+        "api_routes": [],
+        "components": [
+          "LoginForm",
+          "OAuthButton"
+        ]
+      },
+      {
+        "path": "/register",
+        "description": "User registration page using Supabase.",
+        "api_routes": [],
+        "components": [
+          "RegisterForm"
+        ]
+      },
+      {
+        "path": "/",
+        "description": "Home page with links to sign up and log in.",
+        "api_routes": [],
+        "components": [
+          "Header",
+          "ButtonAccount",
+          "ButtonSignin"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "TaskList",
+        "description": "Displays a list of user's tasks, supporting filtering and sorting.",
+        "is_client": true
+      },
+      {
+        "name": "TaskItem",
+        "description": "Displays information about a single task and supports marking it as completed/pending.",
+        "is_client": true
+      },
+      {
+        "name": "TaskFilter",
+        "description": "Component for filtering tasks based on their status (completed/pending).",
+        "is_client": true
+      },
+      {
+        "name": "TaskSorter",
+        "description": "Component for sorting tasks by due date or creation date.",
+        "is_client": true
+      },
+      {
+        "name": "TaskCreator",
+        "description": "Form for creating new tasks.",
+        "is_client": true
+      },
+      {
+        "name": "LoginForm",
+        "description": "Form for users to log into the application.",
+        "is_client": true
+      },
+      {
+        "name": "RegisterForm",
+        "description": "Form for new users to register an account.",
+        "is_client": true
+      },
+      {
+        "name": "OAuthButton",
+        "description": "Button for signing up or logging in using OAuth providers.",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/tasks",
+        "method": "GET",
+        "description": "Returns a list of tasks for the authenticated user, supporting filtering and sorting by query parameters.",
+        "query": "SELECT * FROM tasks WHERE user_id = $user_id ORDER BY $sort COLUMN"
+      },
+      {
+        "path": "/api/tasks",
+        "method": "POST",
+        "description": "Creates a new task for the authenticated user.",
+        "query": "INSERT INTO tasks (user_id, title, due_date, completed) VALUES ($user_id, $title, $due_date, false)"
+      },
+      {
+        "path": "/api/tasks/:id",
+        "method": "PUT",
+        "description": "Updates an existing task for the authenticated user.",
+        "query": "UPDATE tasks SET title = $title, due_date = $due_date, completed = $completed WHERE id = $id AND user_id = $user_id"
+      },
+      {
+        "path": "/api/tasks/:id",
+        "method": "DELETE",
+        "description": "Deletes a task for the authenticated user.",
+        "query": "DELETE FROM tasks WHERE id = $id AND user_id = $user_id"
+      }
+    ],
+    "database": [
+      {
+        "name": "tasks",
+        "schema": "CREATE TABLE tasks (id SERIAL PRIMARY KEY, user_id UUID REFERENCES users(id) ON DELETE CASCADE, title TEXT NOT NULL, due_date DATE, completed BOOLEAN DEFAULT false NOT NULL, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())"
+      },
+      {
+        "name": "users",
+        "schema": "CREATE TABLE users (id UUID PRIMARY KEY, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())"
+      }
+    ]
+  }
+}

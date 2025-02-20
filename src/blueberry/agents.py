@@ -216,14 +216,9 @@ class ProjectBuilder:
             bool: True if setup was successful or user chose to continue, False if setup failed and user chose to abort
         """
         try:
-            # Get credentials from spec if available
-            project_ref = getattr(spec.supabaseConfig, 'projectRef', None) if hasattr(spec, 'supabaseConfig') else None
-            anon_key = getattr(spec.supabaseConfig, 'anonKey', None) if hasattr(spec, 'supabaseConfig') else None
-            service_key = getattr(spec.supabaseConfig, 'serviceKey', None) if hasattr(spec, 'supabaseConfig') else None
-            
             # Create Supabase agent and run setup
             supabase_agent = SupabaseSetupAgent(spec, os.getcwd())
-            supabase_agent.setup(project_ref, anon_key, service_key)
+            supabase_agent.setup()
             return True
             
         except Exception as e:
@@ -259,15 +254,17 @@ class SupabaseSetupAgent:
                         3. Indexes if any
                         4. Initial seed data if needed
                         5. Do not include any RLS policies
+                        6. Do not include any comments
                         
-                        Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, just code."""
+                        Format as a single SQL file with proper ordering of operations. Do not include any other text or markdown, just SQL code.
+                        Give me response as a single string.
+                        """
                     },
                     {
                         "role": "user",
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}"
                     }
                 ],
-                response_format=str,
                 model="gpt-4o-mini",
             )
             return migrations
@@ -275,7 +272,7 @@ class SupabaseSetupAgent:
             self.console.print(f"[red]Failed to generate SQL migration: {e}[/red]")
             raise
             
-    def apply_migration(self, project_ref: str, anon_key: str, service_key: str) -> None:
+    def apply_migration(self, project_ref: str) -> None:
         """Apply migration to Supabase project"""
         try:
             # Check for Supabase CLI
@@ -288,82 +285,82 @@ class SupabaseSetupAgent:
                 check=True,
             )
 
-        # Extract project ref from URL if needed
-        if "supabase.co" in project_ref:
+            # Extract project ref from URL if needed
+            if "supabase.co" in project_ref:
+                try:
+                    # Extract the project reference from URL
+                    project_ref = project_ref.split("//")[1].split(".")[0]
+                except IndexError:
+                    raise Exception("Invalid Supabase project URL format")
+
+            # Validate project ref format
+            if not project_ref.isalnum() or len(project_ref) != 20:
+                raise Exception("Invalid project ref format. Must be a 20-character alphanumeric string.")
+
+            # Generate migration SQL
+            migration_sql = self.get_migration_sql()
+            
+            # Set up project structure
+            supabase_dir = Path(self.project_path) / "supabase"
+            migrations_dir = supabase_dir / "migrations"
+            config_file = supabase_dir / "config.toml"
+            
+            # Create directories
+            migrations_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Write migration file
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
+            migration_file.write_text(migration_sql)
+
             try:
-                # Extract the project reference from URL
-                project_ref = project_ref.split("//")[1].split(".")[0]
-            except IndexError:
-                raise Exception("Invalid Supabase project URL format")
+                # Initialize Supabase project if not already initialized
+                if not config_file.exists():
+                    self.console.print("[yellow]Initializing Supabase project...[/yellow]")
+                    subprocess.run(
+                        ["npx", "supabase", "init"],
+                        cwd=self.project_path,
+                        check=True,
+                    )
 
-        # Validate project ref format
-        if not project_ref.isalnum() or len(project_ref) != 20:
-            raise Exception("Invalid project ref format. Must be a 20-character alphanumeric string.")
-
-        # Generate migration SQL
-        migration_sql = self.get_migration_sql()
-        
-        # Set up project structure
-        supabase_dir = Path(self.project_path) / "supabase"
-        migrations_dir = supabase_dir / "migrations"
-        config_file = supabase_dir / "config.toml"
-        
-        # Create directories
-        migrations_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Write migration file
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
-        migration_file.write_text(migration_sql)
-
-        try:
-            # Initialize Supabase project if not already initialized
-            if not config_file.exists():
-                self.console.print("[yellow]Initializing Supabase project...[/yellow]")
+                # Login to Supabase
+                self.console.print("[yellow]Logging in to Supabase...[/yellow]")
                 subprocess.run(
-                    ["npx", "supabase", "init"],
+                    ["npx", "supabase", "login"],
                     cwd=self.project_path,
                     check=True,
                 )
 
-            # Login to Supabase
-            self.console.print("[yellow]Logging in to Supabase...[/yellow]")
-            subprocess.run(
-                ["npx", "supabase", "login"],
-                cwd=self.project_path,
-                check=True,
-            )
+                # Link to remote project
+                self.console.print(f"[yellow]Linking to Supabase project: {project_ref}[/yellow]")
+                subprocess.run(
+                    [
+                        "npx", "supabase", "link", 
+                        "--project-ref", project_ref,
+                        "--password", "",
+                        "--debug"
+                    ],
+                    cwd=self.project_path,
+                    check=True,
+                )
 
-            # Link to remote project
-            self.console.print(f"[yellow]Linking to Supabase project: {project_ref}[/yellow]")
-            subprocess.run(
-                [
-                    "npx", "supabase", "link", 
-                    "--project-ref", project_ref,
-                    "--password", "",
-                    "--debug"
-                ],
-                cwd=self.project_path,
-                check=True,
-            )
-
-           
-            
-            # Push the migration
-            self.console.print("[yellow]Pushing migration to remote database...[/yellow]")
-            subprocess.run(
-                ["npx", "supabase", "db", "push"],
-                cwd=self.project_path,
-                check=True,
-            )
-            
-            self.console.print("[green]✅ Migration applied successfully[/green]")
-            
-        except subprocess.TimeoutExpired:
-            raise Exception("Operation timed out while applying migration")
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else str(e)
-            raise Exception(f"Migration failed: {error_msg}")
+               
+                
+                # Push the migration
+                self.console.print("[yellow]Pushing migration to remote database...[/yellow]")
+                subprocess.run(
+                    ["npx", "supabase", "db", "push"],
+                    cwd=self.project_path,
+                    check=True,
+                )
+                
+                self.console.print("[green]✅ Migration applied successfully[/green]")
+                
+            except subprocess.TimeoutExpired:
+                raise Exception("Operation timed out while applying migration")
+            except subprocess.CalledProcessError as e:
+                error_msg = e.stderr if e.stderr else str(e)
+                raise Exception(f"Migration failed: {error_msg}")
 
     def setup_environment(self, project_ref: str, anon_key: str, service_key: str) -> None:
         """Set up environment variables for Supabase"""
@@ -380,13 +377,12 @@ class SupabaseSetupAgent:
             raise Exception(f"Failed to set up environment variables: {str(e)}")
 
     def _prompt_credentials(self) -> tuple[str, str, str]:
-        """Prompt user for Supabase credentials if not in spec"""
+        """Prompt user for Supabase credentials"""
         self.console.print("\n[bold yellow]Supabase Credentials Required[/bold yellow]")
         self.console.print("Please provide your Supabase project credentials:")
         
         project_ref = Prompt.ask(
-            "\nProject Reference or URL",
-            default=getattr(self.spec.supabaseConfig, 'projectRef', '') if hasattr(self.spec, 'supabaseConfig') else ''
+            "\nProject Reference or URL"
         )
         
         anon_key = Prompt.ask(
@@ -401,17 +397,16 @@ class SupabaseSetupAgent:
         
         return project_ref, anon_key, service_key
 
-    def setup(self, project_ref: str = None, anon_key: str = None, service_key: str = None) -> None:
+    def setup(self) -> None:
         """Complete Supabase setup including migrations and environment variables"""
         try:
             self.console.print("[bold]Starting Supabase setup...[/bold]")
             
-            # If any credentials are missing, prompt for all of them
-            if not all([project_ref, anon_key, service_key]):
-                project_ref, anon_key, service_key = self._prompt_credentials()
+            # Always prompt for credentials
+            project_ref, anon_key, service_key = self._prompt_credentials()
             
             # Apply database migrations
-            self.apply_migration(project_ref, anon_key, service_key)
+            self.apply_migration(project_ref)
             
             # Set up environment variables
             self.setup_environment(project_ref, anon_key, service_key)

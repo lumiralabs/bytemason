@@ -1,0 +1,119 @@
+{
+  "name": "Todo Application with Supabase & Next.js 14",
+  "description": "A simple todo application allowing users to manage their tasks with create, read, update, delete (CRUD) functionalities, integrated with user authentication and Supabase database for data persistence.",
+  "features": [
+    "Create a new todo item",
+    "Read existing todo items",
+    "Update a todo item as complete/incomplete",
+    "Delete a todo item",
+    "Filter todos by status (all, active, completed)",
+    "User authentication (sign up, sign in, sign out)",
+    "Persist todo data in a Supabase database"
+  ],
+  "structure": {
+    "pages": [
+      {
+        "path": "/",
+        "description": "Home page displaying all todo items.",
+        "api_routes": [
+          "GET /api/todos",
+          "PUT /api/todos",
+          "DELETE /api/todos"
+        ],
+        "components": [
+          "TodoList",
+          "TodoItem",
+          "Filter"
+        ]
+      },
+      {
+        "path": "/dashboard",
+        "description": "Protected dashboard where users can view and manage their todos.",
+        "api_routes": [
+          "GET /api/todos",
+          "POST /api/todos",
+          "PUT /api/todos",
+          "DELETE /api/todos"
+        ],
+        "components": [
+          "TodoList",
+          "TodoForm",
+          "Filter"
+        ]
+      },
+      {
+        "path": "/signin",
+        "description": "User sign-in page for authentication.",
+        "api_routes": [],
+        "components": [
+          "ButtonSignin"
+        ]
+      },
+      {
+        "path": "/api/auth/callback",
+        "description": "Callback route for handling OAuth login redirects from Supabase.",
+        "api_routes": [],
+        "components": []
+      }
+    ],
+    "components": [
+      {
+        "name": "TodoList",
+        "description": "Displays a list of todo items.",
+        "is_client": true
+      },
+      {
+        "name": "TodoItem",
+        "description": "Represents a single todo item with actions.",
+        "is_client": true
+      },
+      {
+        "name": "TodoForm",
+        "description": "Form for adding new todo items.",
+        "is_client": true
+      },
+      {
+        "name": "Filter",
+        "description": "Component to filter todos by status (all, active, completed).",
+        "is_client": true
+      },
+      {
+        "name": "ButtonSignin",
+        "description": "Button handling sign-in functionality using Supabase's magic link or OAuth.",
+        "is_client": true
+      }
+    ],
+    "api_routes": [
+      {
+        "path": "/api/todos",
+        "method": "GET",
+        "description": "Fetches a list of todos for the authenticated user.",
+        "query": "SELECT * FROM todos WHERE user_id = <authenticated_user_id>"
+      },
+      {
+        "path": "/api/todos",
+        "method": "POST",
+        "description": "Creates a new todo item.",
+        "query": "INSERT INTO todos (content, is_complete, user_id) VALUES ($1, $2, $3)"
+      },
+      {
+        "path": "/api/todos",
+        "method": "PUT",
+        "description": "Updates an existing todo item based on ID.",
+        "query": "UPDATE todos SET content = $1, is_complete = $2 WHERE id = $3 AND user_id = $4"
+      },
+      {
+        "path": "/api/todos",
+        "method": "DELETE",
+        "description": "Deletes a todo item based on ID.",
+        "query": "DELETE FROM todos WHERE id = $1 AND user_id = $2"
+      }
+    ],
+    "database": [
+      {
+        "name": "todos",
+        "schema": "CREATE TABLE todos (id SERIAL PRIMARY KEY, content VARCHAR NOT NULL, is_complete BOOLEAN DEFAULT FALSE, user_id UUID REFERENCES users(id) ON DELETE CASCADE)"
+      }
+    ]
+  }
+}
