@@ -268,7 +268,6 @@ class SupabaseSetupAgent:
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}"
                     }
                 ],
-                response_format=str,
                 model="gpt-4o-mini",
             )
             return migrations
