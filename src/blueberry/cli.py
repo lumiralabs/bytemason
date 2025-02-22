@@ -1,7 +1,6 @@
 import typer
 from typing import Optional, List
 from rich.console import Console
-from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.table import Table
@@ -17,6 +16,8 @@ import json
 from datetime import datetime
 import sys
 import rich.box
+import re
+import shutil
 
 # Symbols for different terminal capabilities
 SYMBOLS = {
@@ -302,20 +303,6 @@ async def async_main(code: Optional[str]):
         console.print("  berry --help")
         raise typer.Exit(1)
 
-    # Get project name from user with default
-    project_name = (
-        Prompt.ask(
-            format_message(
-                "info",
-                "What would you like to name your project? (Press Enter to use default)",
-            ),
-            default="my-app",
-            show_default=True,
-        )
-        .lower()
-        .replace(" ", "-")
-    )
-
     try:
         builder = ProjectBuilder()
 
@@ -371,6 +358,8 @@ async def async_main(code: Optional[str]):
             "\nWould you like to proceed with creating the project?", default=True
         ):
             try:
+                project_name = spec.name.lower().replace(" ", "-")
+
                 # Step 4: Clone boilerplate
                 with Progress(
                     SpinnerColumn(spinner_name="dots"),
@@ -603,14 +592,8 @@ def create_spec(
     try:
         builder = ProjectBuilder()
 
-        # Get project name from user
-        project_name = Prompt.ask(
-            format_message("info", "What would you like to name your project?"),
-            default="my-app",
-        ).strip()
-
         # Clean project name
-        project_name = project_name.lower().replace(" ", "-")
+        project_name = os.path.basename(os.getcwd()).lower().replace(" ", "-")
 
         # Step 1: Understand Intent
         with create_progress() as progress:
@@ -843,6 +826,123 @@ def spec2code(
 
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def new(
+    project_name: str = typer.Argument(..., help="Name of the new project"),
+    template: str = typer.Option(
+        "https://github.com/iminoaru/boilerplate.git",
+        "--template",
+        "-t",
+        help="Git repository URL for the template",
+    ),
+    branch: str = typer.Option(
+        "main", "--branch", "-b", help="Branch to use from the template repository"
+    ),
+):
+    """
+    Create a new project from a git template.
+
+    Clones a Next.js + Supabase template repository and sets up the basic project structure.
+    You can specify a custom template repository using the --template option.
+
+    Examples:
+        $ berry new my-app
+        $ berry new my-blog --template https://github.com/user/custom-template.git
+        $ berry new my-app --branch develop
+    """
+    try:
+        # Clean project name
+        project_name = project_name.lower().replace(" ", "-")
+
+        # Validate project name
+        if not re.match(r"^[a-z0-9-]+$", project_name):
+            raise ValueError(
+                "Project name can only contain lowercase letters, numbers, and hyphens"
+            )
+
+        # Check if directory already exists
+        if Path(project_name).exists():
+            raise ValueError(f"Directory '{project_name}' already exists")
+
+        with create_progress() as progress:
+            # Clone the template
+            task = progress.add_task("Cloning template...")
+
+            try:
+                subprocess.run(
+                    [
+                        "git",
+                        "clone",
+                        "--depth",
+                        "1",  # Shallow clone for faster download
+                        "--branch",
+                        branch,
+                        template,
+                        project_name,
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                if "Remote branch not found" in e.stderr:
+                    raise ValueError(
+                        f"Branch '{branch}' not found in template repository"
+                    )
+                raise ValueError(f"Failed to clone template: {e.stderr}")
+
+            progress.update(task, completed=True)
+
+            # Remove git history
+            task = progress.add_task("Setting up project...")
+            shutil.rmtree(Path(project_name) / ".git", ignore_errors=True)
+
+            # Initialize new git repository
+            subprocess.run(
+                ["git", "init"],
+                cwd=project_name,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            # Create initial commit
+            subprocess.run(
+                ["git", "add", "."],
+                cwd=project_name,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "Initial commit from template"],
+                cwd=project_name,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            progress.update(task, completed=True)
+
+        # Show success message and next steps
+        console.print(
+            "\n" + format_message("success", f"Created project {project_name}")
+        )
+        console.print("\n" + format_message("info", "Next steps:"))
+        console.print(f"  1. cd {project_name}")
+        console.print("  2. npm install")
+        console.print("  3. berry supabase init      # Set up Supabase configuration")
+        console.print("  4. npm run dev")
+
+    except Exception as e:
+        error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
+        # Clean up if something went wrong
+        if "project_name" in locals():
+            shutil.rmtree(project_name, ignore_errors=True)
         raise typer.Exit(1)
 
 
