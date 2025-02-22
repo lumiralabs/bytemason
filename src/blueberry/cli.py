@@ -1080,6 +1080,91 @@ def new(
         raise typer.Exit(1)
 
 
+@app.command()
+def repair(
+    spec_file: str = typer.Option(
+        None,
+        "--spec",
+        "-s",
+        help="Path to specification file",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimize output",
+    ),
+):
+    """
+    Repair and fix build errors in generated code.
+
+    Analyzes the current build errors and attempts to fix them using AI.
+    Can work with or without a specification file.
+
+    Examples:
+        $ berry repair
+        $ berry repair --spec specs/myapp_spec.json
+    """
+    try:
+        # Load spec if provided
+        spec = None
+        if spec_file:
+            with open(spec_file) as f:
+                spec_data = json.load(f)
+                spec = ProjectSpec(**spec_data)
+
+        # Create code agent with node_modules ignored
+        code_agent = CodeAgent(os.getcwd(), spec, ignore_patterns=["node_modules/**"])
+
+        # Run build and get errors
+        with create_progress() as progress:
+            task = progress.add_task("[cyan]Checking build...", total=None)
+            errors = asyncio.run(code_agent._run_build())
+            progress.update(task, completed=True)
+
+        if not errors:
+            console.print(format_message("success", "No build errors found!"))
+            return
+
+        # Show errors
+        if not quiet:
+            console.print(format_message("warning", f"Found {len(errors)} build errors:"))
+            for error in errors:
+                console.print(f"  • [red]{error.file}:[/red] {error.message}")
+
+        # Confirm repair
+        if not quiet and not typer.confirm("\nAttempt to repair?", default=True):
+            return
+
+        # Run repair
+        with create_progress() as progress:
+            task = progress.add_task("[cyan]Repairing code...", total=None)
+            asyncio.run(code_agent._repair_code(errors))
+            progress.update(task, completed=True)
+
+        # Final build check
+        with create_progress() as progress:
+            task = progress.add_task("[cyan]Verifying repairs...", total=None)
+            remaining_errors = asyncio.run(code_agent._run_build())
+            progress.update(task, completed=True)
+
+        if remaining_errors:
+            console.print(format_message("warning", f"{len(remaining_errors)} errors remain"))
+            if not quiet:
+                console.print("\nTry:")
+                console.print("  1. Manual code review")
+                console.print("  2. Run 'berry repair' again")
+        else:
+            console.print(format_message("success", "All errors fixed!"))
+
+    except Exception as e:
+        error_console.print(format_message("error", f"Repair failed: {str(e)}"))
+        if not quiet:
+            console.print("\nFor help:")
+            console.print("  berry repair --help")
+        raise typer.Exit(1)
+
+
 def run():
     """Entry point for the CLI"""
     try:
