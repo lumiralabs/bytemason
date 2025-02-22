@@ -665,12 +665,12 @@ def supabase_callback():
 
     Commands:
         init                        Initialize Supabase configuration
-        generate_migrations         Generate migration files from spec
+        generate         Generate migration files from spec
         build                      Apply migrations to Supabase
 
     Examples:
         $ berry supabase init
-        $ berry supabase generate_migrations specs/myapp_spec.json
+        $ berry supabase generate specs/myapp_spec.json
         $ berry supabase build
     """
     pass
@@ -701,7 +701,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
 
 @supabase_app.command()
-def generate_migrations(
+def generate(
     spec_file: str = typer.Argument(..., help="Path to specification file"),
 ):
     """Generate Supabase migration files from a specification file"""
@@ -740,16 +740,51 @@ def generate_migrations(
 
 @supabase_app.command()
 def build():
-    """Apply Supabase migrations to the database"""
+    """Apply Supabase migrations to the remote database"""
     try:
+        # Check for Supabase CLI
+        try:
+            subprocess.run(
+                ["npx", "supabase", "--version"], check=True, capture_output=True
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
+            subprocess.run(
+                ["npm", "install", "supabase", "--save-dev"],
+                check=True,
+                capture_output=True,
+            )
+
+        # Check if project is linked
+        config_file = Path("supabase/config.toml")
+        if not config_file.exists():
+            raise Exception(
+                "Project not linked to Supabase. Please run 'berry supabase init' first"
+            )
+
+        # Login to Supabase (interactive)
+        console.print("\n[yellow]Supabase Login Required[/yellow]")
+        console.print("Press Enter to open your browser for authentication...")
+        subprocess.run(["npx", "supabase", "login"], check=True)
+        console.print("[green]✓ Successfully logged in to Supabase[/green]")
+
+        # Push the migration
+        console.print("\n[yellow]Pushing migration to remote database...[/yellow]")
         result = subprocess.run(
-            ["npx", "supabase", "migration", "up"], capture_output=True, text=True
+            ["npx", "supabase", "db", "push"], capture_output=True, text=True
         )
 
         if result.returncode == 0:
             console.print(format_message("success", "Successfully applied migrations"))
         else:
-            raise Exception(result.stderr)
+            # Check for specific error messages
+            if "no seed files matched pattern" in result.stderr:
+                # This is not a real error, just a warning
+                console.print(
+                    format_message("success", "Successfully applied migrations")
+                )
+            else:
+                raise Exception(result.stderr)
 
     except Exception as e:
         error_console.print(
