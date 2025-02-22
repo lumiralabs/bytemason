@@ -11,9 +11,10 @@ class Intent(BaseModel):
 
 class SupabaseTable(BaseModel):
     name: str = Field(..., description="Name of the table")
-    schema: str = Field(
+    schema_: str = Field(
         ...,
         description="SQL schema for creating the table including types and relationships",
+        alias="schema",
     )
 
 
