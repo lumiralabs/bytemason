@@ -5,7 +5,7 @@ from rich.panel import Panel
 from rich.columns import Columns
 from rich.table import Table
 from rich.tree import Tree
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 import subprocess
 from blueberry.agents import ProjectBuilder, CodeAgent, SupabaseSetupAgent
 from blueberry.models import ProjectSpec
@@ -19,40 +19,35 @@ import rich.box
 import re
 import shutil
 
-# Symbols for different terminal capabilities
+# Terminal symbols with graceful fallback for non-Unicode terminals
 SYMBOLS = {
-    "success": "✓" if sys.stdout.encoding.lower() == "utf-8" else "+",
-    "error": "❌" if sys.stdout.encoding.lower() == "utf-8" else "x",
-    "warning": "⚠️" if sys.stdout.encoding.lower() == "utf-8" else "!",
-    "info": "ℹ️" if sys.stdout.encoding.lower() == "utf-8" else "i",
-    "pending": "…" if sys.stdout.encoding.lower() == "utf-8" else "...",
+    "success": "✓" if sys.stdout.encoding.lower() == "utf-8" else "SUCCESS",
+    "error": "✗" if sys.stdout.encoding.lower() == "utf-8" else "ERROR",
+    "warning": "!" if sys.stdout.encoding.lower() == "utf-8" else "WARNING",
+    "info": "ℹ" if sys.stdout.encoding.lower() == "utf-8" else "INFO",
+    "pending": "⋯" if sys.stdout.encoding.lower() == "utf-8" else "...",
 }
 
 
 def should_use_color(stream=sys.stdout) -> bool:
     """
-    Determine if we should use color based on environment and stream.
-    Checks both stream capability and user preferences.
+    Determine if we should use color based on environment and stream capabilities.
+    
+    Checks:
+    1. Terminal capability (TTY)
+    2. Environment preferences (NO_COLOR, TERM)
+    3. Unicode support
     """
-    # Check if stream is a TTY
     if not hasattr(stream, "isatty") or not stream.isatty():
         return False
 
-    # Check environment variables (in order of precedence)
-    if os.getenv("BERRY_NO_COLOR", ""):  # App-specific override
+    if os.getenv("BERRY_NO_COLOR") or os.getenv("NO_COLOR"):
         return False
-    if os.getenv("NO_COLOR", ""):  # System-wide preference
-        return False
-    if os.getenv("TERM") == "dumb":  # Terminal capability
-        return False
-    if not os.getenv("TERM"):  # No terminal type set
+        
+    if os.getenv("TERM") in ["dumb", None]:
         return False
 
-    # Check encoding supports Unicode
-    if stream.encoding and stream.encoding.lower() not in ["utf-8", "utf8"]:
-        return False
-
-    return True
+    return stream.encoding and stream.encoding.lower() in ["utf-8", "utf8"]
 
 
 def get_symbol(name: str) -> str:
@@ -63,16 +58,16 @@ def get_symbol(name: str) -> str:
 def format_message(msg_type: str, message: str, use_color: bool = True) -> str:
     """Format a message with appropriate symbol and color"""
     symbol = get_symbol(msg_type)
-
+    
     if not use_color:
         return f"{symbol} {message}"
 
     color_map = {
         "success": "green",
-        "error": "red",
+        "error": "red", 
         "warning": "yellow",
         "info": "blue",
-        "pending": "cyan",
+        "pending": "cyan"
     }
 
     return f"[{color_map.get(msg_type, '')}]{symbol} {message}[/]"
@@ -81,19 +76,23 @@ def format_message(msg_type: str, message: str, use_color: bool = True) -> str:
 app = typer.Typer(
     name="berry",
     help="""
-Blueberry CLI - AI-powered full-stack app generator
+🚀 Blueberry CLI - AI-powered Next.js App Generator
 
-Generate full-stack Next.js applications with AI assistance. Blueberry helps you plan,
-build, test and deploy your app with a simple natural language prompt.
+Generate production-ready Next.js applications with AI assistance.
+Blueberry helps you plan, build, and deploy full-stack apps from natural language descriptions.
 
-For more information and documentation:
-    https://lumiralabs.github.io/blueberry/
+Features:
+• Next.js 14 with App Router
+• Supabase Authentication & Database
+• Modern UI Components
+• API Routes & Data Models
+• Production-ready Configuration
 
-Report issues at:
-    https://github.com/lumiralabs/blueberry/issues
+Documentation: https://lumiralabs.github.io/blueberry/
+Issues: https://github.com/lumiralabs/blueberry/issues
 """,
-    no_args_is_help=True,  # Show help when no arguments are provided
-    add_completion=True,  # Enable shell completion
+    no_args_is_help=True,
+    add_completion=True,
 )
 
 # Initialize consoles with proper color detection
@@ -102,26 +101,29 @@ stderr_color = should_use_color(sys.stderr)
 
 console = Console(
     force_terminal=stdout_color,
-    emoji=stdout_color,  # Only use emoji when color is enabled
-    highlight=stdout_color,  # Only use syntax highlighting when color is enabled
+    emoji=stdout_color,
+    highlight=stdout_color,
 )
 error_console = Console(
-    stderr=True, force_terminal=stderr_color, emoji=stderr_color, highlight=stderr_color
+    stderr=True,
+    force_terminal=stderr_color,
+    emoji=stderr_color,
+    highlight=stderr_color,
 )
 
 
-def create_progress() -> Progress:
-    """Create a simple progress display based on environment"""
+def create_progress(description: str = "") -> Progress:
+    """Create a progress display with consistent styling"""
     if stdout_color:
         return Progress(
-            SpinnerColumn(spinner_name="dots"),  # Simple dots spinner
-            TextColumn("[bold]{task.description}"),  # Bold text, no fancy formatting
+            SpinnerColumn(spinner_name="dots"),
+            TextColumn("[bold blue]{task.description}"),
+            TimeElapsedColumn(),
             console=console,
-            transient=True,  # Clear spinner after completion
-            refresh_per_second=8,  # Slower refresh rate for stability
+            transient=True,
+            refresh_per_second=10,
         )
     else:
-        # Even simpler display for non-TTY environments
         return Progress(
             TextColumn("{task.description}"),
             console=console,
@@ -131,8 +133,15 @@ def create_progress() -> Progress:
 
 
 def display_features(features: List[str]):
-    """Display features in a nice formatted way"""
-    feature_panels = [Panel(f" {feature}", expand=True) for feature in features]
+    """Display features in a visually appealing way"""
+    if not features:
+        console.print("[yellow]No features specified[/yellow]")
+        return
+        
+    feature_panels = [
+        Panel(f" {feature}", expand=True, border_style="blue")
+        for feature in features
+    ]
     console.print(Columns(feature_panels))
 
 
@@ -204,55 +213,51 @@ def display_spec(spec: ProjectSpec):
     console.print(Panel(features_table, title="Features", border_style="blue"))
 
 
-@app.command(name="create")
-def main(
-    code: Optional[str] = typer.Argument(
+@app.command()
+def create(
+    prompt: str = typer.Argument(
         None,
-        help="Natural language prompt describing the app you want to build",
+        help="Natural language description of your app",
+        show_default=False,
     ),
     version: bool = typer.Option(
         False,
         "--version",
         "-v",
-        help="Show the application version",
-        rich_help_panel="Utility Options",
+        help="Show version information",
+        rich_help_panel="Utility",
     ),
     no_color: bool = typer.Option(
         False,
         "--no-color",
-        help="Disable colored output and emoji",
-        rich_help_panel="Utility Options",
+        help="Disable colored output",
+        rich_help_panel="Utility",
     ),
-    install_completion: bool = typer.Option(
-        None,
-        help="Install completion for the current shell",
-        rich_help_panel="Shell Completion",
-        callback=lambda: None,
-    ),
-    show_completion: bool = typer.Option(
-        None,
-        help="Show completion script for the current shell",
-        rich_help_panel="Shell Completion",
-        callback=lambda: None,
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q", 
+        help="Minimize output",
+        rich_help_panel="Utility",
     ),
 ):
     """
-    Generate a full-stack Next.js application from a natural language prompt.
+    Generate a Next.js application from a natural language description.
 
-    The prompt should describe the core functionality and features you want in your app.
-    Blueberry will analyze your requirements and generate a complete application with:
+    Your description should include the core functionality and features you want.
+    Blueberry will analyze your requirements and generate a complete application.
 
-    - Next.js 14 frontend with modern UI components
-    - Supabase backend with authentication and database
-    - API routes and data models
-    - Deployment configuration
+    Features:
+    • Next.js 14 frontend with modern UI
+    • Supabase backend with auth
+    • API routes and data models
+    • Production deployment config
 
     Examples:
-        $ berry create "Create a todo list app with authentication"
-        $ berry create "Build a blog with markdown support and comments"
-        $ berry create "Make a real-time chat application with user profiles"
+        $ berry create "Todo list app with user authentication"
+        $ berry create "Blog with markdown and comments"
+        $ berry create "Chat app with real-time messages"
     """
-    # Update color settings if --no-color is passed
     if no_color:
         console.force_terminal = False
         console.emoji = False
@@ -262,166 +267,145 @@ def main(
         error_console.highlight = False
 
     if version:
-        from importlib.metadata import version as get_version
-
         try:
+            from importlib.metadata import version as get_version
             v = get_version("blueberry")
-            console.print(f"Blueberry CLI version: {v}")
+            console.print(f"Blueberry v{v}")
         except:
             console.print("Version information not available")
         raise typer.Exit()
 
-    asyncio.run(async_main(code))
-
-
-async def async_main(code: Optional[str]):
-    """
-    Async main function to handle coroutines
-    """
-    if not code:
+    if not prompt:
         error_console.print(
-            format_message(
-                "error", "No prompt provided. Please provide a description of your app."
-            )
+            format_message("error", "Please provide a description of your app")
         )
-        console.print("\nExample:")
-        console.print('  berry create "Create a todo list app with authentication"')
-        console.print("\nFor more help:")
-        console.print("  berry --help")
+        if not quiet:
+            console.print("\nExample:")
+            console.print('  berry create "Todo list app with authentication"')
+            console.print("\nFor more help:")
+            console.print("  berry create --help")
         raise typer.Exit(1)
 
     try:
-        builder = ProjectBuilder()
-
-        # Step 1: Understand Intent
-        with Progress(
-            SpinnerColumn(spinner_name="dots"),
-            TextColumn("[bold]{task.description}"),
-            console=console,
-            transient=True,
-        ) as progress:
-            task = progress.add_task("Analyzing requirements...")
-            intent = builder.understand_intent(code)
-            progress.update(task, completed=True)
-
-        # Display features
-        console.print(
-            "\n"
-            + format_message(
-                "info", "Based on your prompt, we'll build the following features:"
-            )
-        )
-        if stdout_color:
-            display_features(intent.features)
-        else:
-            for feature in intent.features:
-                console.print(f"- {feature}")
-
-        # Step 2: Verify features with user
-        if not typer.confirm(
-            "\nWould you like to modify these features?", default=False
-        ):
-            console.print(format_message("success", "Using features as shown above"))
-        else:
-            intent = builder.verify_with_user_loop(intent)
-
-        # Step 3: Generate Specification
-        with Progress(
-            SpinnerColumn(spinner_name="dots"),
-            TextColumn("[bold]{task.description}"),
-            console=console,
-            transient=True,
-        ) as progress:
-            task = progress.add_task("Generating specification...")
-            spec = builder.create_spec(intent)
-            progress.update(task, completed=True)
-
-        console.print(
-            "\n" + format_message("success", "Specification generated successfully!")
-        )
-
-        # Ask user to proceed
-        if typer.confirm(
-            "\nWould you like to proceed with creating the project?", default=True
-        ):
-            try:
-                project_name = spec.name.lower().replace(" ", "-")
-
-                # Step 4: Clone boilerplate
-                with Progress(
-                    SpinnerColumn(spinner_name="dots"),
-                    TextColumn("[bold]{task.description}"),
-                    console=console,
-                    transient=True,
-                ) as progress:
-                    task = progress.add_task("Cloning template...")
-                    subprocess.run(
-                        [
-                            "git",
-                            "clone",
-                            "https://github.com/iminoaru/boilerplate.git",
-                            project_name,
-                        ],
-                        check=True,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    progress.update(task, completed=True)
-
-                # Setup project
-                project_path = os.path.abspath(project_name)
-                console.print(
-                    format_message(
-                        "info", f"\nProject path: [bold]{project_path}[/bold]"
-                    )
-                )
-
-                original_dir = os.getcwd()
-                os.chdir(project_path)
-
-                try:
-                    # Step 5: Set up Supabase
-                    console.print(
-                        "\n" + format_message("info", "Setting up Supabase...")
-                    )
-                    if not builder.setup_supabase(spec):
-                        raise Exception("Supabase setup failed")
-
-                    # Step 6: Transform template
-                    with Progress(
-                        SpinnerColumn(spinner_name="dots"),
-                        TextColumn("[bold]{task.description}"),
-                        console=console,
-                        transient=True,
-                    ) as progress:
-                        task = progress.add_task("Generating application code...")
-                        code_agent = CodeAgent(project_path, spec)
-                        await code_agent.transform_template()
-                        progress.update(task, completed=True)
-
-                    # Success!
-                    console.print(
-                        "\n"
-                        + format_message("success", "Project created successfully!")
-                    )
-
-                    # Show next steps
-                    console.print("\n" + format_message("info", "Next steps:"))
-                    console.print(f"  1. cd {project_name}")
-                    console.print("  2. npm install")
-                    console.print("  3. npm run dev")
-
-                finally:
-                    os.chdir(original_dir)
-
-            except subprocess.CalledProcessError:
-                raise Exception("Failed to clone boilerplate repository")
-        else:
-            console.print("\n" + format_message("info", "Project creation cancelled."))
-
+        asyncio.run(generate_app(prompt, quiet))
+    except KeyboardInterrupt:
+        error_console.print("\n" + format_message("warning", "Operation cancelled"))
+        raise typer.Exit(130)
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
+        if not quiet:
+            console.print("\nFor help:")
+            console.print("  berry create --help")
         raise typer.Exit(1)
+
+
+async def generate_app(prompt: str, quiet: bool = False):
+    """Generate application from prompt"""
+    builder = ProjectBuilder()
+
+    # Analyze requirements
+    with create_progress() as progress:
+        task = progress.add_task("📝 Analyzing requirements...")
+        try:
+            intent = builder.understand_intent(prompt)
+            progress.update(task, completed=True)
+        except Exception as e:
+            raise Exception(f"Failed to analyze requirements: {str(e)}")
+
+    if not quiet:
+        console.print("\n" + format_message("info", "Planned features:"))
+        display_features(intent.features)
+
+    # Verify features
+    if not quiet and typer.confirm("\nModify features?", default=False):
+        try:
+            intent = builder.verify_with_user_loop(intent)
+        except Exception as e:
+            raise Exception(f"Failed to modify features: {str(e)}")
+
+    # Generate specification
+    with create_progress() as progress:
+        task = progress.add_task("🔨 Generating specification...")
+        try:
+            spec = builder.create_spec(intent)
+            progress.update(task, completed=True)
+        except Exception as e:
+            raise Exception(f"Failed to generate specification: {str(e)}")
+
+    console.print("\n" + format_message("success", "Specification ready!"))
+
+    # Confirm project creation
+    if not quiet and not typer.confirm("\nCreate project?", default=True):
+        console.print(format_message("info", "Operation cancelled"))
+        return
+
+    try:
+        project_name = spec.name.lower().replace(" ", "-")
+
+        # Clone template
+        with create_progress() as progress:
+            task = progress.add_task("📦 Preparing project...")
+            try:
+                subprocess.run(
+                    [
+                        "git",
+                        "clone",
+                        "--depth=1",
+                        "--quiet",
+                        "https://github.com/iminoaru/boilerplate.git",
+                        project_name,
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                progress.update(task, completed=True)
+            except subprocess.CalledProcessError as e:
+                raise Exception(f"Failed to clone template: {e.stderr}")
+
+        project_path = os.path.abspath(project_name)
+        if not quiet:
+            console.print(
+                format_message("info", f"Project location: [bold]{project_path}[/bold]")
+            )
+
+        # Setup project
+        original_dir = os.getcwd()
+        os.chdir(project_path)
+
+        try:
+            # Setup Supabase
+            if not quiet:
+                console.print("\n" + format_message("info", "Configuring Supabase..."))
+            if not builder.setup_supabase(spec):
+                raise Exception("Supabase setup failed")
+
+            # Generate code
+            with create_progress() as progress:
+                task = progress.add_task("🚀 Generating application...")
+                code_agent = CodeAgent(project_path, spec)
+                success = await code_agent.transform_template()
+                if not success:
+                    raise Exception("Code generation failed")
+                progress.update(task, completed=True)
+
+            # Success!
+            console.print("\n" + format_message("success", "Project ready!"))
+
+            if not quiet:
+                console.print("\n" + format_message("info", "Next steps:"))
+                console.print(f"  1. cd {project_name}")
+                console.print("  2. npm install")
+                console.print("  3. npm run dev")
+
+        finally:
+            os.chdir(original_dir)
+
+    except Exception as e:
+        # Cleanup on failure
+        shutil.rmtree(project_name, ignore_errors=True)
+        raise e
 
 
 def get_project_status():
@@ -560,21 +544,43 @@ def status():
     console.print(actions)
 
 
-@app.command(name="create_spec")
-def create_spec(
+@app.command(name="plan")
+def plan(
     prompt: str = typer.Argument(
         ...,
-        help="Natural language prompt describing the app you want to build",
+        help="Natural language description of your app",
+    ),
+    output: str = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output file name (default: name_timestamp_spec.json)",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimize output",
     ),
 ):
     """
-    Generate and save a project specification from a natural language prompt.
+    Plan your application from a description.
 
-    Creates a JSON specification file based on your description and saves it to the specs directory.
-    This spec can later be used to generate code using the spec2code command.
+    Creates a detailed project plan including:
+    • Project structure
+    • Database schema
+    • API routes
+    • UI components
+    • Authentication setup
 
-    Example:
-        $ berry create_spec "Create a todo list app with authentication"
+    The plan can be used to:
+    1. Generate code (berry generate)
+    2. Create database schema (berry db generate)
+    3. Track project evolution
+
+    Examples:
+        $ berry plan "Todo list with user authentication"
+        $ berry plan "Blog with comments" -o blog_spec.json
     """
     try:
         builder = ProjectBuilder()
@@ -582,105 +588,124 @@ def create_spec(
         # Clean project name
         project_name = os.path.basename(os.getcwd()).lower().replace(" ", "-")
 
-        # Step 1: Understand Intent
+        # Analyze requirements
         with create_progress() as progress:
-            task = progress.add_task("Analyzing requirements...")
+            task = progress.add_task("📝 Analyzing requirements...")
             intent = builder.understand_intent(prompt)
             progress.update(task, completed=True)
 
         # Display features
-        console.print(
-            "\n"
-            + format_message(
-                "info", "Based on your prompt, we'll include the following features:"
-            )
-        )
-        if stdout_color:
+        if not quiet:
+            console.print("\n" + format_message("info", "Planned features:"))
             display_features(intent.features)
-        else:
-            for feature in intent.features:
-                console.print(f"- {feature}")
 
-        # Step 2: Verify features with user
-        if not typer.confirm(
-            "\nWould you like to modify these features?", default=False
-        ):
-            console.print(format_message("success", "Using features as shown above"))
-        else:
+        # Verify features
+        if not quiet and typer.confirm("\nModify features?", default=False):
             intent = builder.verify_with_user_loop(intent)
 
-        # Step 3: Generate Specification
+        # Generate specification
         with create_progress() as progress:
-            task = progress.add_task("Generating specification...")
+            task = progress.add_task("🔨 Generating specification...")
             spec = builder.create_spec(intent)
-            # Set the project name in the spec
             spec.name = project_name
             progress.update(task, completed=True)
 
-        # Create specs directory if it doesn't exist
+        # Create specs directory
         specs_dir = Path("specs")
         specs_dir.mkdir(exist_ok=True)
 
-        # Save spec to file
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        spec_file = specs_dir / f"{spec.name}_{timestamp}_spec.json"
+        # Generate filename
+        if not output:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output = f"{spec.name}_{timestamp}_spec.json"
+
+        spec_file = specs_dir / output
+        
+        # Save specification
         with open(spec_file, "w") as f:
             json.dump(spec.dict(), f, indent=2)
 
-        console.print(
-            "\n" + format_message("success", f"Specification saved to: {spec_file}")
-        )
+        console.print("\n" + format_message("success", f"Specification saved: {spec_file}"))
 
+        if not quiet:
+            console.print("\n" + format_message("info", "Next steps:"))
+            console.print("  1. Review the specification")
+            console.print("  2. berry db setup  # Configure database")
+            console.print(f"  3. berry db generate {spec_file}  # Generate database schema")
+            console.print(f"  4. berry db push {spec_file}  # Apply schema to database")
+            console.print(f"  5. berry code {spec_file}  # Generate code")
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
         raise typer.Exit(1)
 
 
-# Create a subgroup for supabase commands
-supabase_app = typer.Typer(
-    name="supabase", help="Manage Supabase-related operations", no_args_is_help=True
+# Create a subgroup for database commands
+db = typer.Typer(
+    name="db",
+    help="Manage database and authentication setup",
+    no_args_is_help=True,
 )
 
-# Register the supabase group with the main app
-app.add_typer(supabase_app)
+# Register the database group with the main app
+app.add_typer(db)
 
-
-@supabase_app.callback()
-def supabase_callback():
+@db.command()
+def setup(
+    url: str = typer.Option(
+        None,
+        "--url",
+        "-u",
+        help="Supabase project URL (e.g., https://xxx.supabase.co)",
+        prompt="Project URL",
+    ),
+    anon_key: str = typer.Option(
+        None,
+        "--anon-key",
+        "-k",
+        help="Supabase anon key",
+        prompt="Anon key",
+    ),
+    service_key: str = typer.Option(
+        None,
+        "--service-key",
+        "-s",
+        help="Supabase service role key",
+        prompt="Service role key",
+        hide_input=True,
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimize output",
+    ),
+):
     """
-    Manage Supabase-related operations.
+    Configure database connection and authentication.
 
-    Commands:
-        init                        Initialize Supabase configuration
-        generate         Generate migration files from spec
-        build                      Apply migrations to Supabase
+    Sets up your project with Supabase credentials and initializes:
+    • Database connection
+    • Authentication
+    • API access
+    • Local development
+
+    The setup process will:
+    1. Install required dependencies
+    2. Configure environment variables
+    3. Initialize local development
+    4. Link to your Supabase project
 
     Examples:
-        $ berry supabase init
-        $ berry supabase generate specs/myapp_spec.json
-        $ berry supabase build
+        $ berry db setup
+        $ berry db setup --url https://xxx.supabase.co --anon-key xxx
     """
-    pass
-
-
-@supabase_app.command()
-def init():
-    """Initialize Supabase configuration and link project"""
     try:
-        console.print("\n[bold yellow]Supabase Project Setup[/bold yellow]")
-        console.print("Please provide your Supabase project credentials:\n")
-
-        # Get project URL/ref
-        project_url = typer.prompt(
-            "Project URL (e.g., https://xxx.supabase.co)", type=str
-        )
-
         # Extract project ref from URL
-        if "supabase.co" in project_url:
-            project_ref = project_url.split("//")[1].split(".")[0]
+        if "supabase.co" in url:
+            project_ref = url.split("//")[1].split(".")[0]
         else:
-            project_ref = project_url
-            project_url = f"https://{project_ref}.supabase.co"
+            project_ref = url
+            url = f"https://{project_ref}.supabase.co"
 
         # Validate project ref format
         if not project_ref.isalnum() or len(project_ref) != 20:
@@ -688,43 +713,69 @@ def init():
                 "Invalid project reference. Must be a 20-character alphanumeric string."
             )
 
-        # Get API keys
-        anon_key = typer.prompt("Anon/Public Key", type=str, hide_input=False)
-        service_key = typer.prompt("Service Role Key", type=str, hide_input=True)
-
-        # Create agent and set up environment
+        # Create agent and setup environment
         agent = SupabaseSetupAgent(None, os.getcwd())
         
         # Set up environment variables
-        console.print("[yellow]Setting up environment variables...[/yellow]")
+        if not quiet:
+            console.print(format_message("info", "Setting up environment..."))
         agent.setup_environment(project_ref, anon_key, service_key)
 
-        # Initialize and link project
-        console.print("[yellow]Setting up Supabase project...[/yellow]")
+        # Initialize project
+        if not quiet:
+            console.print(format_message("info", "Initializing database..."))
         agent.initialize_project(project_ref)
 
-        console.print("\n[green]✓ Supabase project setup complete![/green]")
-        console.print("\nNext steps:")
-        console.print(
-            "  1. berry supabase generate specs/your_spec.json  # Generate migrations"
-        )
-        console.print(
-            "  2. berry supabase build                         # Apply migrations"
-        )
+        console.print("\n" + format_message("success", "Database setup complete!"))
+        
+        if not quiet:
+            console.print("\n" + format_message("info", "Next steps:"))
+            console.print("  1. berry db generate  # Generate database schema")
+            console.print("  2. berry db push     # Apply schema to database")
 
     except Exception as e:
-        error_console.print(f"\n[red]❌ Failed to initialize Supabase: {str(e)}[/red]")
+        error_console.print("\n" + format_message("error", f"Setup failed: {str(e)}"))
         # Clean up if something went wrong
         if os.path.exists(".env.local"):
             os.remove(".env.local")
         raise typer.Exit(1)
 
 
-@supabase_app.command()
+@db.command()
 def generate(
-    spec_file: str = typer.Argument(..., help="Path to specification file"),
+    spec_file: str = typer.Argument(
+        ...,
+        help="Path to specification file",
+    ),
+    output: str = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output file name (default: timestamp_schema.sql)",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimize output",
+    ),
 ):
-    """Generate Supabase migration files from a specification file"""
+    """
+    Generate database schema from specification.
+
+    Creates SQL migration files that define:
+    • Database tables
+    • Relationships
+    • Indexes
+    • Security policies
+
+    The generated schema will be saved in:
+    supabase/migrations/
+
+    Examples:
+        $ berry db generate specs/myapp_spec.json
+        $ berry db generate specs/myapp_spec.json -o initial.sql
+    """
     try:
         # Load and validate spec
         with open(spec_file) as f:
@@ -734,101 +785,148 @@ def generate(
         # Create agent
         agent = SupabaseSetupAgent(spec, os.getcwd())
         
-        console.print("[yellow]Generating SQL migration...[/yellow]")
+        if not quiet:
+            console.print(format_message("info", "Generating schema..."))
+        
         migration_sql = agent.get_migration_sql()
         
         # Create migrations directory
         migrations_dir = Path("supabase/migrations")
         migrations_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write migration file
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
+        # Generate filename
+        if not output:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            output = f"{timestamp}_schema.sql"
+        
+        migration_file = migrations_dir / output
         
         with open(migration_file, "w") as f:
             f.write(migration_sql)
         
         console.print(
-            format_message("success", f"Generated migration file: {migration_file}")
+            format_message("success", f"Generated schema: {migration_file}")
         )
-        console.print("\nNext step:")
-        console.print("  berry supabase build  # Apply the generated migrations")
+
+        if not quiet:
+            console.print("\n" + format_message("info", "Next step:"))
+            console.print("  berry db push  # Apply schema to database")
 
     except Exception as e:
         error_console.print(
-            format_message("error", f"Failed to generate migrations: {str(e)}")
+            format_message("error", f"Schema generation failed: {str(e)}")
         )
         raise typer.Exit(1)
 
 
-@supabase_app.command()
-def build():
-    """Apply Supabase migrations to the remote database"""
+@db.command()
+def push(
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show changes without applying them",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Skip confirmation prompt",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimize output",
+    ),
+):
+    """
+    Apply schema changes to the database.
+
+    Pushes local migrations to your Supabase database:
+    • Applies new migrations
+    • Updates tables and relationships
+    • Maintains data integrity
+    • Shows detailed change log
+
+    Migrations are applied from:
+    supabase/migrations/
+
+    Examples:
+        $ berry db push
+        $ berry db push --dry-run  # Preview changes
+        $ berry db push --force    # Skip confirmation
+    """
     try:
         # Check for environment variables
         env_file = Path(".env.local")
         if not env_file.exists():
             raise Exception(
-                "Environment file not found. Please run 'berry supabase init' first"
+                "Environment not configured. Run 'berry db setup' first"
             )
 
-        # Check for migrations directory and files
+        # Check for migrations
         migrations_dir = Path("supabase/migrations")
         if not migrations_dir.exists() or not any(migrations_dir.glob("*.sql")):
             raise Exception(
-                "No migrations found. Please run 'berry supabase generate' first"
+                "No migrations found. Run 'berry db generate' first"
             )
 
-        # Read environment variables
-        env_vars = {}
-        with open(env_file) as f:
-            for line in f:
-                if "=" in line:
-                    key, value = line.strip().split("=", 1)
-                    env_vars[key] = value
-
-        # Extract required values
-        project_url = env_vars.get("NEXT_PUBLIC_SUPABASE_URL", "")
-        anon_key = env_vars.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
-        service_key = env_vars.get("SUPABASE_SERVICE_ROLE_KEY", "")
-
-        if not all([project_url, anon_key, service_key]):
-            raise Exception("Missing required environment variables")
-
-        # Extract project ref from URL
-        project_ref = project_url.split("//")[1].split(".")[0]
-
-        # Push the migrations
-        console.print("[yellow]Applying migrations to remote database...[/yellow]")
-        subprocess.run(
-            ["npx", "supabase", "db", "push"],
-            cwd=os.getcwd(),
-            check=True,
-        )
+        # Add --dry-run flag if requested
+        cmd = ["npx", "supabase", "db", "push"]
+        if dry_run:
+            cmd.append("--dry-run")
+        if force:
+            cmd.append("--force")
+            
+        if not quiet:
+            console.print(format_message("info", "Applying schema changes..."))
         
-        console.print("[green]✓ Successfully applied migrations[/green]")
-        console.print("\nNext steps:")
-        console.print("  1. npm run dev  # Start the development server")
-        console.print("  2. Check your Supabase dashboard for the updated schema")
+        # Run command without capturing output to allow password prompt
+        try:
+            subprocess.run(cmd, check=True)
+            console.print(format_message("success", "Schema updated successfully"))
+            
+            if not quiet:
+                console.print("\n" + format_message("info", "Next steps:"))
+                console.print("  1. npm run dev  # Start development")
+                console.print("  2. Check Supabase dashboard for changes")
+        except subprocess.CalledProcessError as e:
+            raise Exception("Failed to apply schema changes")
 
     except Exception as e:
-        error_console.print(f"\n[red]❌ Failed to apply migrations: {str(e)}[/red]")
+        error_console.print(format_message("error", f"Error: {str(e)}"))
         raise typer.Exit(1)
 
 
 @app.command()
-def spec2code(
-    spec_file: str = typer.Argument(..., help="Path to the specification JSON file"),
+def code(
+    spec_file: str = typer.Argument(
+        ...,
+        help="Path to the specification file",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimize output",
+    ),
 ):
     """
-    Generate code from a saved specification file.
+    Generate code from your project plan.
 
-    Takes a previously generated specification file and generates code based on it.
-    This allows separating the specification generation from code generation.
-    Will ignore node_modules directories to preserve existing dependencies.
+    Takes your project plan and generates:
+    • Next.js components and pages
+    • API routes and handlers
+    • Database models and types
+    • Authentication flows
+    • UI components
 
-    Example:
-        $ berry spec2code specs/myapp_spec.json
+    The code is generated in the current directory.
+    Existing node_modules are preserved.
+
+    Examples:
+        $ berry code specs/myapp_spec.json
+        $ berry code path/to/spec.json --quiet
     """
     try:
         # Load and validate spec
@@ -840,27 +938,29 @@ def spec2code(
         
         # Check if we're not inside node_modules
         if "node_modules" in project_path:
-            raise ValueError("Cannot run spec2code inside a node_modules directory")
+            raise ValueError("Cannot run code inside node_modules")
             
-        console.print(
-            format_message("info", f"\nProject path: [bold]{project_path}[/bold]")
-        )
+        if not quiet:
+            console.print(
+                format_message("info", f"Project location: [bold]{project_path}[/bold]")
+            )
 
-        # Transform template, explicitly ignoring node_modules
+        # Generate code
         with create_progress() as progress:
-            task = progress.add_task("Generating application code...")
+            task = progress.add_task("🚀 Generating application code...")
             code_agent = CodeAgent(project_path, spec, ignore_patterns=["node_modules/**"])
-            asyncio.run(code_agent.transform_template())
+            success = asyncio.run(code_agent.transform_template())
+            if not success:
+                raise Exception("Code generation failed")
             progress.update(task, completed=True)
 
-        console.print(
-            "\n" + format_message("success", "Project code generated successfully!")
-        )
+        console.print("\n" + format_message("success", "Code generated successfully!"))
 
-        # Show next steps
-        console.print("\n" + format_message("info", "Next steps:"))
-        console.print("  1. npm install")
-        console.print("  2. npm run dev")
+        if not quiet:
+            console.print("\n" + format_message("info", "Next steps:"))
+            console.print("  1. npm install")
+            console.print("  2. berry db setup")
+            console.print("  3. npm run dev")
 
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
@@ -869,41 +969,56 @@ def spec2code(
 
 @app.command()
 def new(
-    project_name: str = typer.Argument(..., help="Name of the new project"),
+    project_name: str = typer.Argument(
+        ...,
+        help="Name of the new project",
+    ),
+    template: str = typer.Option(
+        "default",
+        "--template",
+        "-t",
+        help="Template to use",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Minimize output",
+    ),
 ):
     """
-    Create a new project from the default template.
+    Create a new project from scratch.
 
-    Clones the Next.js + Supabase template repository and sets up the basic project structure.
+    Sets up a new Next.js + Supabase project with:
+    • Modern project structure
+    • Authentication ready
+    • API routes configured
+    • Development environment
 
-    Example:
+    Examples:
         $ berry new my-app
+        $ berry new my-blog --template blog
     """
     try:
-        # Clean project name
-        project_name = project_name.lower().replace(" ", "-")
-
-        # Validate project name
+        # Validate name
         if not re.match(r"^[a-z0-9-]+$", project_name):
             raise ValueError(
                 "Project name can only contain lowercase letters, numbers, and hyphens"
             )
 
-        # Check if directory already exists
         if Path(project_name).exists():
             raise ValueError(f"Directory '{project_name}' already exists")
 
         with create_progress() as progress:
-            # Clone the template
-            task = progress.add_task("Cloning template...")
-
+            # Clone template
+            task = progress.add_task("📦 Creating project...")
             try:
                 subprocess.run(
                     [
                         "git",
                         "clone",
-                        "--depth",
-                        "1",  # Shallow clone for faster download
+                        "--depth=1",
+                        "--quiet",
                         "https://github.com/iminoaru/boilerplate.git",
                         project_name,
                     ],
@@ -917,20 +1032,18 @@ def new(
 
             progress.update(task, completed=True)
 
-            # Remove git history
-            task = progress.add_task("Setting up project...")
+            # Setup git
+            task = progress.add_task("🔧 Configuring project...")
             shutil.rmtree(Path(project_name) / ".git", ignore_errors=True)
 
-            # Initialize new git repository
             subprocess.run(
-                ["git", "init"],
+                ["git", "init", "--quiet"],
                 cwd=project_name,
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
 
-            # Create initial commit
             subprocess.run(
                 ["git", "add", "."],
                 cwd=project_name,
@@ -938,8 +1051,9 @@ def new(
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+
             subprocess.run(
-                ["git", "commit", "-m", "Initial commit from template"],
+                ["git", "commit", "-m", "Initial commit", "--quiet"],
                 cwd=project_name,
                 check=True,
                 stdout=subprocess.DEVNULL,
@@ -948,23 +1062,28 @@ def new(
 
             progress.update(task, completed=True)
 
-        # Show success message and next steps
-        console.print(
-            "\n" + format_message("success", f"Created project {project_name}")
-        )
-        console.print("\n" + format_message("info", "Next steps:"))
-        console.print(f"  1. cd {project_name}")
-        console.print("  2. npm install")
-        console.print("  3. berry supabase init      # Set up Supabase configuration")
-        console.print("  4. npm run dev")
+        console.print("\n" + format_message("success", f"Created project {project_name}"))
+
+        if not quiet:
+            console.print("\n" + format_message("info", "Next steps:"))
+            console.print(f"  1. cd {project_name}")
+            console.print("  2. npm install")
+            console.print('  3. berry plan "Your app description"  # Plan your app')
+            console.print("  4. berry db setup  # Configure database")
+            console.print("  5. npm run dev  # Start development")
 
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
-        # Clean up if something went wrong
+        # Cleanup
         if "project_name" in locals():
             shutil.rmtree(project_name, ignore_errors=True)
         raise typer.Exit(1)
 
 
 def run():
-    app()
+    """Entry point for the CLI"""
+    try:
+        app()
+    except Exception as e:
+        error_console.print("\n" + format_message("error", f"Unexpected error: {str(e)}"))
+        raise typer.Exit(1)
