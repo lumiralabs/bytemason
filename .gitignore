@@ -12,7 +12,9 @@ site/
 ## Frontend
 node_modules/
 .next/
-.env
+.env*
 *.lockb
 
 .DS_Store
+*.db 
+specs/

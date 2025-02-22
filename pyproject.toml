@@ -27,6 +27,9 @@ berry = "blueberry.cli:run"
 where = ["src"]
 include = ["blueberry*"]
 
+[tool.ruff]
+ignore = ["E722"]
+
 [dependency-groups]
 dev = [
     "pre-commit>=4.1.0",
