@@ -53,27 +53,27 @@ Use the App Router pattern instead of the Pages Router for better organization a
 
 ## KEY POINTS TO ALWAYS FOLLOW
 
-- Always use the most latest nextJS 14 app router conventions in all cases, weather imports and exports,folder structure, api structure, etc.
+- Always use the most latest nextJS 14 app router conventions in all cases, whether imports and exports,folder structure, api structure, etc.
 - Always remember that you are working in a monorepo and that you can use the libs and types in any file you want.
 - Always remember to add "use client" at top of all the client side components. any dynamic imports should be in the client side components.
 - Always use the tailwind css for styling.
 - Use shadcn to add components rather than creating new ones. put them in `components/ui` folder.
-- Try to use the existing components where possible for the ui and avoid creating duplicate ones. 
+- Try to use the existing components where possible for the ui and avoid creating duplicate ones.
 - Don't add duplicate or very similar code, follow the DRY principle.
 
 ## 1. List of Existing Files and Their Purposes
 
 - **Root Files:**
-  - `config.ts`: Likely contains configuration settings for the application.
+  - `config.ts`: Contains configuration settings for the application.
   - `middleware.ts`: Contains middleware logic, possibly for handling requests or authentication.
   - `next-env.d.ts`: TypeScript environment definitions for Next.js.
   - `next.config.js`: Configuration file for Next.js, used to customize the build process.
   - `postcss.config.js`: Configuration for PostCSS, a tool for transforming CSS.
   - `tailwind.config.js`: Configuration for Tailwind CSS, a utility-first CSS framework.
 - **Components Directory:**
-  - `components/ButtonAccount.tsx`: A React component, likely a button related to user account actions.
-  - `components/ButtonSignin.tsx`: A React component, likely a button for signing in.
-  - `components/LayoutClient.tsx`: A React component, possibly defining the layout for client-side pages.
+  - `components/ButtonAccount.tsx`: A React component, a button that operates user account actions.
+  - `components/ButtonSignin.tsx`: A React component, a button for signing in.
+  - `components/LayoutClient.tsx`: A React component, defines the layout for client-side pages.
 - **Libs Directory:**
   - `libs/api.ts`: Contains API-related logic or functions.
   - `libs/seo.tsx`: Contains SEO-related components or logic.
@@ -87,10 +87,10 @@ Use the App Router pattern instead of the Pages Router for better organization a
 - **Lib Directory:**
   - `libs/utils.ts`: Utility functions used across the application.
 
+currently installed packages:
 
- currently installed packages:
- ```json
- {
+```json
+{
   "name": "",
   "version": "0.1.0",
   "private": true,
@@ -142,8 +142,6 @@ Use the App Router pattern instead of the Pages Router for better organization a
   }
 }
 ```
-
-
 
 ### 2. Component Patterns and Their Usage
 
@@ -233,13 +231,18 @@ export default apiClient;
 ### 4. Authentication Setup
 
 The `libs/supabase` subdirectory contains all the inititalizations and middleware like for client and server.
- - user details can be taken care by just these commands
- ```typescript
- import { createClient } from "@/libs/supabase/server";
- const supabase = createClient();
- const {  data: { user } } = await supabase.auth.getUser();
- ```
-- Dont write your own middleware or any auth logic, everything is already premade in the `libs/supabase` folder. 
+
+- user details can be taken care by just these commands
+
+```typescript
+import { createClient } from "@/libs/supabase/server";
+const supabase = createClient();
+const {
+  data: { user },
+} = await supabase.auth.getUser();
+```
+
+- Dont write your own middleware or any auth logic, everything is already premade in the `libs/supabase` folder.
 - A register + login page is already made which user supabse magic link and google oauth, magiclink works by default so dont worry about any auth management, just make sure to redirect to /signin page if the user is not authenticated. You dont need to make any changes to this page.
 
 ```typescript
@@ -394,6 +397,10 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 ```
 
+<<<<<<< Updated upstream
 
 
 Always use the most latest nextJS 14 app router conventions in all cases weather imports and exports,folder structure, api structure, etc.
+=======
+Always use the most latest nextJS 14 app router conventions in all cases, whether imports, exports,folder structure, api structure, etc.
+>>>>>>> Stashed changes

@@ -2,7 +2,8 @@ from lumos import lumos
 from blueberry.models import Intent, ProjectSpec, GeneratedCode, FileMode, FileContent, BuildError
 import httpx
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Prompt
+import typer
 import json
 import os
 import subprocess
@@ -107,7 +108,7 @@ class ProjectBuilder:
             for i, feature in enumerate(intent.features, 1):
                 console.print(f"{i}. {feature}")
             
-            if not Confirm.ask("\nWould you like to modify these features?"):
+            if not typer.confirm("\nWould you like to modify these features?", default=False, show_default=True):
                 break
                 
             # Show modification options
@@ -122,14 +123,14 @@ class ProjectBuilder:
                 new_feature = Prompt.ask("Enter new feature")
                 
                 # Validate and enhance the feature with AI
-                if Confirm.ask("Would you like AI to validate and enhance this feature?"):
+                if typer.confirm("Would you like AI to validate and enhance this feature?", default=True, show_default=True):
                     status = console.status("[bold green]Validating feature...")
                     status.start()
                     try:
                         enhanced_feature = self.validate_feature(new_feature)
                         if enhanced_feature != new_feature:
                             status.stop()
-                            if Confirm.ask(f"Would you like to use the enhanced version: {enhanced_feature}?"):
+                            if typer.confirm(f"Would you like to use the enhanced version: {enhanced_feature}?", default=True, show_default=True):
                                 new_feature = enhanced_feature
                         else:
                             status.stop()
@@ -239,7 +240,7 @@ class ProjectBuilder:
             
         except Exception as e:
             self.console.print(f"[red]Error setting up Supabase: {str(e)}[/red]")
-            if not Confirm.ask("Would you like to continue with the rest of the implementation?"):
+            if not typer.confirm("Would you like to continue with the rest of the implementation?", default=False, show_default=True):
                 return False
             return True
 
@@ -361,7 +362,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o-mini"
+            model="gpt-4o"
         )
         
         # Log the raw response
@@ -611,10 +612,9 @@ class SupabaseSetupAgent:
                         "content": """Generate a complete pgsql migration for Supabase based on the specification.
                         Include:
                         1. Table creation with proper types and constraints
-                        2. Functions and triggers for linking auth.users to the users table
-                        3. Indexes if any
-                        4. Initial seed data if needed
-                        5. Do not include any RLS policies
+                        2. Indexes if any
+                        3. Initial seed data if needed
+                        4. Do not include any RLS policies
                         
                         Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, just code."""
                     },
@@ -676,17 +676,20 @@ class SupabaseSetupAgent:
                     cwd=self.project_path,
                     check=True,
                 )
+                self.console.print("[green]✓ Supabase project initialized[/green]")
 
-            # Login to Supabase
-            self.console.print("[yellow]Logging in to Supabase...[/yellow]")
+            # Login to Supabase (interactive)
+            self.console.print("\n[yellow]Supabase Login Required[/yellow]")
+            self.console.print("Press Enter to open your browser for authentication...")
             subprocess.run(
                 ["npx", "supabase", "login"],
                 cwd=self.project_path,
                 check=True,
             )
+            self.console.print("[green]✓ Successfully logged in to Supabase[/green]")
 
             # Link to remote project
-            self.console.print(f"[yellow]Linking to Supabase project: {clean_project_ref}[/yellow]")
+            self.console.print(f"\n[yellow]Linking to Supabase project: {clean_project_ref}[/yellow]")
             subprocess.run(
                 [
                     "npx", "supabase", "link", 
@@ -697,16 +700,16 @@ class SupabaseSetupAgent:
                 cwd=self.project_path,
                 check=True,
             )
+            self.console.print("[green]✓ Project linked successfully[/green]")
             
             # Push the migration
-            self.console.print("[yellow]Pushing migration to remote database...[/yellow]")
+            self.console.print("\n[yellow]Pushing migration to remote database...[/yellow]")
             subprocess.run(
                 ["npx", "supabase", "db", "push"],
                 cwd=self.project_path,
                 check=True,
             )
-            
-            self.console.print("[green]✅ Migration applied successfully[/green]")
+            self.console.print("[green]✓ Migration applied successfully[/green]")
             
         except subprocess.TimeoutExpired:
             raise Exception("Operation timed out while applying migration")
@@ -771,20 +774,44 @@ SUPABASE_SERVICE_ROLE_KEY={service_key}
     def setup(self, project_ref: str = None, anon_key: str = None, service_key: str = None) -> None:
         """Complete Supabase setup including migrations and environment variables"""
         try:
-            self.console.print("[bold]Starting Supabase setup...[/bold]")
+            self.console.print("\n[bold]Starting Supabase Setup[/bold]")
             
             # If any credentials are missing, prompt for all of them
             if not all([project_ref, anon_key, service_key]):
-                project_ref, anon_key, service_key = self._prompt_credentials()
+                self.console.print("\n[bold yellow]Supabase Credentials Required[/bold yellow]")
+                self.console.print("Please provide your Supabase project credentials:\n")
+                
+                project_ref = Prompt.ask(
+                    "Project Reference or URL",
+                    default=getattr(self.spec.supabaseConfig, 'projectRef', '') if hasattr(self.spec, 'supabaseConfig') else ''
+                )
+                
+                anon_key = Prompt.ask(
+                    "Anon Key (public)",
+                    password=False,
+                )
+                
+                service_key = Prompt.ask(
+                    "Service Role Key (secret)",
+                    password=True,
+                )
             
-            # Apply database migrations
+            # First set up environment variables (non-interactive)
+            with Progress(
+                SpinnerColumn(spinner_name="dots"),
+                TextColumn("[bold]{task.description}"),
+                console=self.console,
+                transient=True
+            ) as progress:
+                task = progress.add_task("Setting up environment variables...")
+                self.setup_environment(project_ref, anon_key, service_key)
+                progress.update(task, completed=True)
+            
+            # Then handle the interactive parts without progress spinner
             self.apply_migration(project_ref, anon_key, service_key)
             
-            # Set up environment variables
-            self.setup_environment(project_ref, anon_key, service_key)
-            
-            self.console.print("[green bold]✅ Supabase setup completed successfully[/green bold]")
+            self.console.print("\n[green bold]✅ Supabase setup completed successfully[/green bold]")
             
         except Exception as e:
-            self.console.print(f"[red bold]❌ Supabase setup failed: {str(e)}[/red bold]")
+            self.console.print(f"\n[red bold]❌ Supabase setup failed: {str(e)}[/red bold]")
             raise
