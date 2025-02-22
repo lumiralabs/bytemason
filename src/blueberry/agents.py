@@ -21,6 +21,7 @@ from typing import List, Dict
 import shutil
 from rich.progress import SpinnerColumn, TextColumn
 import asyncio
+from fnmatch import fnmatch
 
 
 class ProjectBuilder:
@@ -286,10 +287,11 @@ class ProjectBuilder:
 
 
 class CodeAgent:
-    def __init__(self, project_path: str, spec: ProjectSpec):
+    def __init__(self, project_path: str, spec: ProjectSpec, ignore_patterns: List[str] = None):
         self.project_path = Path(project_path)
         self.spec = spec
         self.console = Console()
+        self.ignore_patterns = ignore_patterns or []
         self.existing_files = self._map_existing_files()
         self.current_dir = Path(__file__).parent
 
@@ -300,14 +302,18 @@ class CodeAgent:
             log_dir / f"ai_responses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         )
 
+    def _should_ignore(self, path: str) -> bool:
+        """Check if a path should be ignored based on ignore patterns"""
+        return any(fnmatch(path, pattern) for pattern in self.ignore_patterns)
+
     def _map_existing_files(self) -> Dict[str, Path]:
         """Map all existing files in the boilerplate"""
         files = {}
         for file_path in self.project_path.rglob("*"):
             if file_path.is_file():
                 relative_path = str(file_path.relative_to(self.project_path))
-                # Skip .git files
-                if not relative_path.startswith(".git/"):
+                # Skip .git files and ignored patterns
+                if not relative_path.startswith(".git/") and not self._should_ignore(relative_path):
                     files[relative_path] = file_path
                     self.console.print(f"[dim]Found: {relative_path}[/dim]")
         return files
@@ -705,30 +711,14 @@ class SupabaseSetupAgent:
             self.console.print(f"[red]Failed to generate SQL migration: {e}[/red]")
             raise
 
-    def apply_migration(
-        self, project_ref: str, anon_key: str, service_key: str
-    ) -> None:
-        """Apply migration to Supabase project"""
+    def initialize_project(self, project_ref: str) -> None:
+        """Initialize and link Supabase project without migrations"""
         try:
-            # Generate migration SQL first
-            migration_sql = self.get_migration_sql()
-
-            # Create migrations directory
-            migrations_dir = Path(self.project_path) / "supabase" / "migrations"
-            migrations_dir.mkdir(parents=True, exist_ok=True)
-
-            # Write migration file with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
-            migration_file.write_text(migration_sql)
-
             # Check for Supabase CLI
             try:
                 subprocess.run(["npx", "supabase", "--version"], check=True)
             except (subprocess.CalledProcessError, FileNotFoundError):
-                self.console.print(
-                    "[yellow]Supabase CLI not found. Installing...[/yellow]"
-                )
+                self.console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
                 subprocess.run(
                     ["npm", "install", "supabase", "--save-dev"],
                     cwd=self.project_path,
@@ -782,17 +772,42 @@ class SupabaseSetupAgent:
                     clean_project_ref,
                     "--password",
                     "",
-                    "--debug",
                 ],
                 cwd=self.project_path,
                 check=True,
             )
             self.console.print("[green]✓ Project linked successfully[/green]")
 
+        except subprocess.TimeoutExpired:
+            raise Exception("Operation timed out while initializing project")
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else str(e)
+            raise Exception(f"Project initialization failed: {error_msg}")
+
+    def apply_migration(
+        self, project_ref: str, anon_key: str, service_key: str
+    ) -> None:
+        """Apply migration to Supabase project"""
+        try:
+            if self.spec is None:
+                self.console.print("[yellow]No spec provided, skipping migration generation[/yellow]")
+                return
+
+            # Generate migration SQL
+            self.console.print("\n[yellow]Generating migration SQL...[/yellow]")
+            migration_sql = self.get_migration_sql()
+
+            # Create migrations directory
+            migrations_dir = Path(self.project_path) / "supabase" / "migrations"
+            migrations_dir.mkdir(parents=True, exist_ok=True)
+
+            # Write migration file with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
+            migration_file.write_text(migration_sql)
+
             # Push the migration
-            self.console.print(
-                "\n[yellow]Pushing migration to remote database...[/yellow]"
-            )
+            self.console.print("\n[yellow]Pushing migration to remote database...[/yellow]")
             subprocess.run(
                 ["npx", "supabase", "db", "push"],
                 cwd=self.project_path,
@@ -820,31 +835,15 @@ class SupabaseSetupAgent:
 NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
 SUPABASE_SERVICE_ROLE_KEY={service_key}
 """
-            env_path = Path(self.project_path) / ".env.local"
-
-            # Create backup if file exists
-            if env_path.exists():
-                backup_path = Path(self.project_path) / ".env.local.bak"
-                shutil.copy2(env_path, backup_path)
-                self.console.print(
-                    "[yellow]Created backup of existing .env.local[/yellow]"
-                )
-
-            # Write new .env.local file
-            env_path.write_text(env_content)
-            self.console.print(
-                "[green]✅ Environment variables set up successfully in .env.local[/green]"
-            )
+            # Write to .env.local in the project directory
+            env_file = Path(self.project_path) / ".env.local"
+            env_file.write_text(env_content)
+            
+            self.console.print("[green]✓ Environment variables set up successfully in .env.local[/green]")
 
         except Exception as e:
-            self.console.print(
-                f"[red]Failed to set up environment variables: {str(e)}[/red]"
-            )
-            # Restore backup if it exists
-            if "backup_path" in locals() and backup_path.exists():
-                shutil.copy2(backup_path, env_path)
-                self.console.print("[yellow]Restored backup of .env.local[/yellow]")
-            raise Exception(f"Failed to set up environment variables: {str(e)}")
+            self.console.print(f"[red]Failed to set up environment variables: {e}[/red]")
+            raise
 
     def _prompt_credentials(self) -> tuple[str, str, str]:
         """Prompt user for Supabase credentials if not in spec"""

@@ -86,19 +86,6 @@ Blueberry CLI - AI-powered full-stack app generator
 Generate full-stack Next.js applications with AI assistance. Blueberry helps you plan,
 build, test and deploy your app with a simple natural language prompt.
 
-Commands:
-    create     Generate a new application from a description
-    status     Show current workspace state
-
-Examples:
-    $ berry create "Create a todo list app with authentication"
-    $ berry create "Build a blog with markdown support and comments"
-    $ berry status  # Show current system state
-
-Shell Completion:
-    $ berry --install-completion  # Install tab completion for your shell
-    $ berry --show-completion     # Show completion script
-
 For more information and documentation:
     https://lumiralabs.github.io/blueberry/
 
@@ -703,73 +690,20 @@ def init():
 
         # Get API keys
         anon_key = typer.prompt("Anon/Public Key", type=str, hide_input=False)
-
         service_key = typer.prompt("Service Role Key", type=str, hide_input=True)
 
-        # Create .env.local with credentials
-        env_content = f"""NEXT_PUBLIC_SUPABASE_URL={project_url}
-NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
-SUPABASE_SERVICE_ROLE_KEY={service_key}
-"""
-        with open(".env.local", "w") as f:
-            f.write(env_content)
+        # Create agent and set up environment
+        agent = SupabaseSetupAgent(None, os.getcwd())
+        
+        # Set up environment variables
+        console.print("[yellow]Setting up environment variables...[/yellow]")
+        agent.setup_environment(project_ref, anon_key, service_key)
 
-        console.print(format_message("success", "Created .env.local with credentials"))
+        # Initialize and link project
+        console.print("[yellow]Setting up Supabase project...[/yellow]")
+        agent.initialize_project(project_ref)
 
-        # Check for Supabase CLI
-        try:
-            subprocess.run(
-                ["npx", "supabase", "--version"],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
-            subprocess.run(
-                ["npm", "install", "supabase", "--save-dev"],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-            )
-
-        # Initialize Supabase project
-        console.print("[yellow]Initializing Supabase project...[/yellow]")
-        subprocess.run(
-            ["npx", "supabase", "init"],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-
-        # Login to Supabase (interactive)
-        console.print("\n[yellow]Supabase Login Required[/yellow]")
-        console.print("Press Enter to open your browser for authentication...")
-        subprocess.run(
-            ["npx", "supabase", "login"],
-            check=True,
-        )
-
-        # Link to remote project
-        console.print(f"\n[yellow]Linking to Supabase project: {project_ref}[/yellow]")
-        subprocess.run(
-            [
-                "npx",
-                "supabase",
-                "link",
-                "--project-ref",
-                project_ref,
-                "--password",
-                "",
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-
-        console.print(
-            "\n" + format_message("success", "Supabase project setup complete!")
-        )
+        console.print("\n[green]✓ Supabase project setup complete![/green]")
         console.print("\nNext steps:")
         console.print(
             "  1. berry supabase generate specs/your_spec.json  # Generate migrations"
@@ -779,9 +713,7 @@ SUPABASE_SERVICE_ROLE_KEY={service_key}
         )
 
     except Exception as e:
-        error_console.print(
-            format_message("error", f"Failed to initialize Supabase: {str(e)}")
-        )
+        error_console.print(f"\n[red]❌ Failed to initialize Supabase: {str(e)}[/red]")
         # Clean up if something went wrong
         if os.path.exists(".env.local"):
             os.remove(".env.local")
@@ -794,30 +726,33 @@ def generate(
 ):
     """Generate Supabase migration files from a specification file"""
     try:
+        # Load and validate spec
         with open(spec_file) as f:
             spec_data = json.load(f)
-
         spec = ProjectSpec(**spec_data)
 
+        # Create agent
+        agent = SupabaseSetupAgent(spec, os.getcwd())
+        
+        console.print("[yellow]Generating SQL migration...[/yellow]")
+        migration_sql = agent.get_migration_sql()
+        
         # Create migrations directory
         migrations_dir = Path("supabase/migrations")
         migrations_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate migration file
+        # Write migration file
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         migration_file = migrations_dir / f"{timestamp}_initial_schema.sql"
-
-        # Use SupabaseSetupAgent to generate SQL
-        agent = SupabaseSetupAgent(spec, os.getcwd())
-        migration_sql = agent.get_migration_sql()
-
-        # Write SQL file
+        
         with open(migration_file, "w") as f:
             f.write(migration_sql)
-
+        
         console.print(
             format_message("success", f"Generated migration file: {migration_file}")
         )
+        console.print("\nNext step:")
+        console.print("  berry supabase build  # Apply the generated migrations")
 
     except Exception as e:
         error_console.print(
@@ -830,54 +765,54 @@ def generate(
 def build():
     """Apply Supabase migrations to the remote database"""
     try:
-        # Check for Supabase CLI
-        try:
-            subprocess.run(
-                ["npx", "supabase", "--version"], check=True, capture_output=True
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
-            subprocess.run(
-                ["npm", "install", "supabase", "--save-dev"],
-                check=True,
-                capture_output=True,
-            )
-
-        # Check if project is linked
-        config_file = Path("supabase/config.toml")
-        if not config_file.exists():
+        # Check for environment variables
+        env_file = Path(".env.local")
+        if not env_file.exists():
             raise Exception(
-                "Project not linked to Supabase. Please run 'berry supabase init' first"
+                "Environment file not found. Please run 'berry supabase init' first"
             )
 
-        # Login to Supabase (interactive)
-        console.print("\n[yellow]Supabase Login Required[/yellow]")
-        console.print("Press Enter to open your browser for authentication...")
-        subprocess.run(["npx", "supabase", "login"], check=True)
-        console.print("[green]✓ Successfully logged in to Supabase[/green]")
+        # Check for migrations directory and files
+        migrations_dir = Path("supabase/migrations")
+        if not migrations_dir.exists() or not any(migrations_dir.glob("*.sql")):
+            raise Exception(
+                "No migrations found. Please run 'berry supabase generate' first"
+            )
 
-        # Push the migration
-        console.print("\n[yellow]Pushing migration to remote database...[/yellow]")
-        result = subprocess.run(
-            ["npx", "supabase", "db", "push"], capture_output=True, text=True
+        # Read environment variables
+        env_vars = {}
+        with open(env_file) as f:
+            for line in f:
+                if "=" in line:
+                    key, value = line.strip().split("=", 1)
+                    env_vars[key] = value
+
+        # Extract required values
+        project_url = env_vars.get("NEXT_PUBLIC_SUPABASE_URL", "")
+        anon_key = env_vars.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+        service_key = env_vars.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+        if not all([project_url, anon_key, service_key]):
+            raise Exception("Missing required environment variables")
+
+        # Extract project ref from URL
+        project_ref = project_url.split("//")[1].split(".")[0]
+
+        # Push the migrations
+        console.print("[yellow]Applying migrations to remote database...[/yellow]")
+        subprocess.run(
+            ["npx", "supabase", "db", "push"],
+            cwd=os.getcwd(),
+            check=True,
         )
-
-        if result.returncode == 0:
-            console.print(format_message("success", "Successfully applied migrations"))
-        else:
-            # Check for specific error messages
-            if "no seed files matched pattern" in result.stderr:
-                # This is not a real error, just a warning
-                console.print(
-                    format_message("success", "Successfully applied migrations")
-                )
-            else:
-                raise Exception(result.stderr)
+        
+        console.print("[green]✓ Successfully applied migrations[/green]")
+        console.print("\nNext steps:")
+        console.print("  1. npm run dev  # Start the development server")
+        console.print("  2. Check your Supabase dashboard for the updated schema")
 
     except Exception as e:
-        error_console.print(
-            format_message("error", f"Failed to apply migrations: {str(e)}")
-        )
+        error_console.print(f"\n[red]❌ Failed to apply migrations: {str(e)}[/red]")
         raise typer.Exit(1)
 
 
@@ -888,8 +823,9 @@ def spec2code(
     """
     Generate code from a saved specification file.
 
-    Takes a previously generated specification file and creates a new project based on it.
+    Takes a previously generated specification file and generates code based on it.
     This allows separating the specification generation from code generation.
+    Will ignore node_modules directories to preserve existing dependencies.
 
     Example:
         $ berry spec2code specs/myapp_spec.json
@@ -900,52 +836,31 @@ def spec2code(
             spec_data = json.load(f)
         spec = ProjectSpec(**spec_data)
 
-        project_name = spec.name.lower().replace(" ", "-")
-
-        # Clone boilerplate
-        with create_progress() as progress:
-            task = progress.add_task("Cloning template...")
-            subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "https://github.com/iminoaru/boilerplate.git",
-                    project_name,
-                ],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            progress.update(task, completed=True)
-
-        project_path = os.path.abspath(project_name)
+        project_path = os.getcwd()
+        
+        # Check if we're not inside node_modules
+        if "node_modules" in project_path:
+            raise ValueError("Cannot run spec2code inside a node_modules directory")
+            
         console.print(
             format_message("info", f"\nProject path: [bold]{project_path}[/bold]")
         )
 
-        original_dir = os.getcwd()
-        os.chdir(project_path)
+        # Transform template, explicitly ignoring node_modules
+        with create_progress() as progress:
+            task = progress.add_task("Generating application code...")
+            code_agent = CodeAgent(project_path, spec, ignore_patterns=["node_modules/**"])
+            asyncio.run(code_agent.transform_template())
+            progress.update(task, completed=True)
 
-        try:
-            # Transform template
-            with create_progress() as progress:
-                task = progress.add_task("Generating application code...")
-                code_agent = CodeAgent(project_path, spec)
-                asyncio.run(code_agent.transform_template())
-                progress.update(task, completed=True)
+        console.print(
+            "\n" + format_message("success", "Project code generated successfully!")
+        )
 
-            console.print(
-                "\n" + format_message("success", "Project created successfully!")
-            )
-
-            # Show next steps
-            console.print("\n" + format_message("info", "Next steps:"))
-            console.print(f"  1. cd {project_name}")
-            console.print("  2. npm install")
-            console.print("  3. npm run dev")
-
-        finally:
-            os.chdir(original_dir)
+        # Show next steps
+        console.print("\n" + format_message("info", "Next steps:"))
+        console.print("  1. npm install")
+        console.print("  2. npm run dev")
 
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
@@ -955,26 +870,14 @@ def spec2code(
 @app.command()
 def new(
     project_name: str = typer.Argument(..., help="Name of the new project"),
-    template: str = typer.Option(
-        "https://github.com/iminoaru/boilerplate.git",
-        "--template",
-        "-t",
-        help="Git repository URL for the template",
-    ),
-    branch: str = typer.Option(
-        "main", "--branch", "-b", help="Branch to use from the template repository"
-    ),
 ):
     """
-    Create a new project from a git template.
+    Create a new project from the default template.
 
-    Clones a Next.js + Supabase template repository and sets up the basic project structure.
-    You can specify a custom template repository using the --template option.
+    Clones the Next.js + Supabase template repository and sets up the basic project structure.
 
-    Examples:
+    Example:
         $ berry new my-app
-        $ berry new my-blog --template https://github.com/user/custom-template.git
-        $ berry new my-app --branch develop
     """
     try:
         # Clean project name
@@ -1001,9 +904,7 @@ def new(
                         "clone",
                         "--depth",
                         "1",  # Shallow clone for faster download
-                        "--branch",
-                        branch,
-                        template,
+                        "https://github.com/iminoaru/boilerplate.git",
                         project_name,
                     ],
                     check=True,
@@ -1012,10 +913,6 @@ def new(
                     text=True,
                 )
             except subprocess.CalledProcessError as e:
-                if "Remote branch not found" in e.stderr:
-                    raise ValueError(
-                        f"Branch '{branch}' not found in template repository"
-                    )
                 raise ValueError(f"Failed to clone template: {e.stderr}")
 
             progress.update(task, completed=True)

@@ -1,6 +1,7 @@
 _experimental/
 _dev/
 .codegen/
+.cursor/
 
 ## Backend
 .venv/
