@@ -615,15 +615,51 @@ class SupabaseSetupAgent:
                         2. Indexes if any
                         3. Initial seed data if needed
                         4. Do not include any RLS policies
+
+                        Adapt the example below according to the spec.
                         
-                        Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, just code."""
+                        Example:
+                        ```sql
+                       CREATE TABLE users (
+                            id UUID PRIMARY KEY,
+                            email VARCHAR(255) UNIQUE NOT NULL,
+                            name VARCHAR(255),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+
+                        CREATE TABLE todos (
+                            id SERIAL PRIMARY KEY,
+                            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                            title VARCHAR(255) NOT NULL,
+                            completed BOOLEAN DEFAULT false,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+
+                        CREATE INDEX idx_todos_user_id ON todos(user_id);
+
+                        INSERT INTO users (id, email, name) VALUES 
+                        (UUID_GENERATE_V4(), 'user1@example.com', 'User One'),
+                        (UUID_GENERATE_V4(), 'user2@example.com', 'User Two');
+
+                        INSERT INTO todos (user_id, title, completed) VALUES 
+                        ((SELECT id FROM users LIMIT 1), 'Sample Todo 1', false),
+                        ((SELECT id FROM users LIMIT 1), 'Sample Todo 2', true);
+                        ```
+                        
+                    
+                        
+                        Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, just code.
+                        Return the response as a string of the sql code.
+                        Do not wrap in ```sql tags.
+                        
+                        """
                     },
                     {
                         "role": "user",
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}"
                     }
                 ],
-                model="gpt-4o-mini",
+                model="gpt-4o",
             )
             return migrations
         except Exception as e:
