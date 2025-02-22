@@ -225,18 +225,18 @@ class ProjectBuilder:
                 model="gpt-4o",
             )
 
-            # Create specs directory if it doesn't exist
-            os.makedirs("specs", exist_ok=True)
+            # # Create specs directory if it doesn't exist
+            # os.makedirs("specs", exist_ok=True)
 
-            # Save the spec to a file
-            spec_dict = spec.model_dump()
-            spec_file = os.path.join(
-                "specs", f"{spec.name.lower().replace(' ', '_')}_spec.json"
-            )
-            with open(spec_file, "w") as f:
-                json.dump(spec_dict, f, indent=2)
+            # # Save the spec to a file
+            # spec_dict = spec.model_dump()
+            # spec_file = os.path.join(
+            #     "specs", f"{spec.name.lower().replace(' ', '_')}_spec.json"
+            # )
+            # with open(spec_file, "w") as f:
+            #     json.dump(spec_dict, f, indent=2)
 
-            self.console.print(f"[green]✓ Specification saved to: {spec_file}[/green]")
+            # self.console.print(f"[green]✓ Specification saved to: {spec_file}[/green]")
 
             return spec
 
