@@ -678,25 +678,113 @@ def supabase_callback():
 
 @supabase_app.command()
 def init():
-    """Initialize Supabase configuration by creating a template .env.local file"""
+    """Initialize Supabase configuration and link project"""
     try:
-        # Create .env.local template
-        env_template = """
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url_here
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
-        """.strip()
+        console.print("\n[bold yellow]Supabase Project Setup[/bold yellow]")
+        console.print("Please provide your Supabase project credentials:\n")
 
+        # Get project URL/ref
+        project_url = typer.prompt(
+            "Project URL (e.g., https://xxx.supabase.co)", type=str
+        )
+
+        # Extract project ref from URL
+        if "supabase.co" in project_url:
+            project_ref = project_url.split("//")[1].split(".")[0]
+        else:
+            project_ref = project_url
+            project_url = f"https://{project_ref}.supabase.co"
+
+        # Validate project ref format
+        if not project_ref.isalnum() or len(project_ref) != 20:
+            raise ValueError(
+                "Invalid project reference. Must be a 20-character alphanumeric string."
+            )
+
+        # Get API keys
+        anon_key = typer.prompt("Anon/Public Key", type=str, hide_input=False)
+
+        service_key = typer.prompt("Service Role Key", type=str, hide_input=True)
+
+        # Create .env.local with credentials
+        env_content = f"""NEXT_PUBLIC_SUPABASE_URL={project_url}
+NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
+SUPABASE_SERVICE_ROLE_KEY={service_key}
+"""
         with open(".env.local", "w") as f:
-            f.write(env_template)
+            f.write(env_content)
 
-        console.print(format_message("success", "Created .env.local template"))
-        console.print("\nPlease fill in your Supabase credentials in .env.local")
+        console.print(format_message("success", "Created .env.local with credentials"))
+
+        # Check for Supabase CLI
+        try:
+            subprocess.run(
+                ["npx", "supabase", "--version"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            console.print("[yellow]Supabase CLI not found. Installing...[/yellow]")
+            subprocess.run(
+                ["npm", "install", "supabase", "--save-dev"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+
+        # Initialize Supabase project
+        console.print("[yellow]Initializing Supabase project...[/yellow]")
+        subprocess.run(
+            ["npx", "supabase", "init"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        # Login to Supabase (interactive)
+        console.print("\n[yellow]Supabase Login Required[/yellow]")
+        console.print("Press Enter to open your browser for authentication...")
+        subprocess.run(
+            ["npx", "supabase", "login"],
+            check=True,
+        )
+
+        # Link to remote project
+        console.print(f"\n[yellow]Linking to Supabase project: {project_ref}[/yellow]")
+        subprocess.run(
+            [
+                "npx",
+                "supabase",
+                "link",
+                "--project-ref",
+                project_ref,
+                "--password",
+                "",
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        console.print(
+            "\n" + format_message("success", "Supabase project setup complete!")
+        )
+        console.print("\nNext steps:")
+        console.print(
+            "  1. berry supabase generate specs/your_spec.json  # Generate migrations"
+        )
+        console.print(
+            "  2. berry supabase build                         # Apply migrations"
+        )
 
     except Exception as e:
         error_console.print(
             format_message("error", f"Failed to initialize Supabase: {str(e)}")
         )
+        # Clean up if something went wrong
+        if os.path.exists(".env.local"):
+            os.remove(".env.local")
         raise typer.Exit(1)
 
 
