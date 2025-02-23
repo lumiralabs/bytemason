@@ -35,7 +35,8 @@ class RepairAgent:
             "write_file": self._write_file,
             "create_backup": self._create_backup,
             "restore_backup": self._restore_backup,
-            "generate_fix": self._generate_fix
+            "generate_fix": self._generate_fix,
+            "create_file": self._create_file
         }
         
         # Initialize progress display
@@ -85,7 +86,7 @@ class RepairAgent:
                     {"role": "system", "content": "You are an expert at analyzing Next.js and TypeScript build errors."},
                     {"role": "user", "content": prompt}
                 ],
-                model="gpt-4o",
+                model="claude-3-5-sonnet-20240620",
                 response_format=BuildErrorReport
             )
 
@@ -159,7 +160,12 @@ class RepairAgent:
         
         write_file:
         - Input: JSON string with path and content
-        Example: {"tool": "write_file", "input": "{\\"path\\": \\"path/to/file.ts\\", \\"content\\": \\"file content here\\"}", "thought": "Writing fixed content"}
+        Example: {"tool": "write_file", "input": {"path": "path/to/file.ts", "content": "file content here"}, "thought": "Writing fixed content"}
+        
+        create_file:
+        - Input: JSON object with path, content, and optional overwrite flag
+        - Use this when you need to create a new file or directory
+        Example: {"tool": "create_file", "input": {"path": "path/to/file.ts", "content": "file content here", "overwrite": false}, "thought": "Creating new file"}
         
         create_backup:
         - Input: Simple string with file path
@@ -170,11 +176,13 @@ class RepairAgent:
         Example: {"tool": "restore_backup", "input": "path/to/file.ts", "thought": "Restoring previous backup"}
         
         generate_fix:
-        - Input: JSON string with file, current_content, and error
-        Example: {"tool": "generate_fix", "input": "{\\"file\\": \\"path/to/file.ts\\", \\"current_content\\": \\"..\\", \\"error\\": \\"...\\"}", "thought": "Generating fix for the error"}
+        - Input: JSON object with file, current_content, and error
+        Example: {"tool": "generate_fix", "input": {"file": "path/to/file.ts", "current_content": "...", "error": "..."}, "thought": "Generating fix for the error"}
 
         Always create a backup before modifying any file.
         Think carefully about each step and explain your reasoning.
+        If you need to create a new file, use the create_file tool instead of write_file.
+        When creating new files, make sure to include all necessary imports and boilerplate code.
         
         Respond in a structured format with:
         {
@@ -216,7 +224,7 @@ class RepairAgent:
                 messages.append({"role": "user", "content": next_prompt})
                 response = await lumos.call_ai_async(
                     messages=messages,
-                    model="gpt-4o",
+                    model="claude-3-5-sonnet-20240620",
                     response_format=AgentResponse
                 )
                 
@@ -296,9 +304,9 @@ class RepairAgent:
         try:
             # Parse input as JSON if it's a JSON string
             input_data = action.input
-            if action.tool in ["write_file", "generate_fix"]:
+            if action.tool in ["write_file", "generate_fix", "create_file"]:
                 try:
-                    input_data = json.loads(action.input)
+                    input_data = json.loads(action.input) if isinstance(action.input, str) else action.input
                 except json.JSONDecodeError:
                     return f"Error: Input for {action.tool} must be valid JSON"
             
@@ -449,7 +457,7 @@ class RepairAgent:
                     {"role": "system", "content": "You are an expert Next.js TypeScript developer. Provide only the fixed code with no explanation."},
                     {"role": "user", "content": prompt}
                 ],
-                model="gpt-4o"
+                model="claude-3-5-sonnet-20240620"
             )
             
             # Clean up the response
@@ -466,4 +474,65 @@ class RepairAgent:
                 success=False,
                 message=f"Error generating fix: {str(e)}",
                 path=data['file']
+            )
+
+    async def _create_file(self, data: Dict[str, str]) -> FileOperation:
+        """Create a new file with the specified content.
+        
+        Args:
+            data: Dictionary containing:
+                - path: The file path to create
+                - content: The content to write to the file
+                - overwrite: (optional) Whether to overwrite if file exists
+        """
+        try:
+            file_path = self.project_path / data["path"]
+            
+            # Check if file exists and handle overwrite
+            if file_path.exists() and not data.get("overwrite", False):
+                return FileOperation(
+                    success=False,
+                    message=f"File {data['path']} already exists. Set overwrite=true to replace it.",
+                    path=data["path"]
+                )
+            
+            # Create parent directories if they don't exist
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write the file
+            with self.progress:
+                task = self.progress.add_task(f"[cyan]Creating new file {data['path']}...", total=1)
+                
+                # Create backup if file exists
+                if file_path.exists():
+                    await self._create_backup(data["path"])
+                
+                # Write the new content
+                file_path.write_text(data["content"])
+                self.progress.update(task, advance=1)
+            
+            # Show the created file
+            if data["content"].strip():
+                self.console.print(Panel(
+                    Syntax(
+                        data["content"],
+                        "python" if data["path"].endswith('.py') else "typescript",
+                        theme="monokai",
+                        line_numbers=True
+                    ),
+                    title=f"[bold green]✨ Created {data['path']}[/bold green]",
+                    border_style="green"
+                ))
+            
+            return FileOperation(
+                success=True,
+                message=f"Successfully created file {data['path']}",
+                path=data["path"],
+                content=data["content"]
+            )
+        except Exception as e:
+            return FileOperation(
+                success=False,
+                message=f"Error creating file: {str(e)}",
+                path=data["path"]
             )
