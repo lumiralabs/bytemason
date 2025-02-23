@@ -2,12 +2,6 @@ from pathlib import Path
 import shutil
 from datetime import datetime
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
-from rich.syntax import Syntax
-from rich.table import Table
-from rich.live import Live
-from rich.layout import Layout
 from lumos import lumos
 from typing import List, Dict, Any, Optional
 from blueberry.models import (
@@ -35,37 +29,8 @@ class RepairAgent:
             "write_file": self._write_file,
             "create_backup": self._create_backup,
             "restore_backup": self._restore_backup,
-            "generate_fix": self._generate_fix,
-            "create_file": self._create_file
+            "generate_fix": self._generate_fix
         }
-        
-        # Initialize progress display
-        self.progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            console=self.console
-        )
-
-    def _create_error_table(self, error: BuildError) -> Table:
-        """Create a rich table to display error information"""
-        table = Table(show_header=True, header_style="bold magenta", border_style="blue")
-        table.add_column("Property", style="cyan")
-        table.add_column("Value", style="yellow")
-        
-        table.add_row("File", error.file)
-        table.add_row("Type", error.type)
-        table.add_row("Message", error.message)
-        if error.line:
-            table.add_row("Line", str(error.line))
-        if error.column:
-            table.add_row("Column", str(error.column))
-        if error.code:
-            table.add_row("Code", error.code)
-            
-        return table
 
     async def _analyze_build_errors_with_ai(self, build_output: str) -> BuildErrorReport:
         """Use AI to analyze build errors more intelligently"""
@@ -86,7 +51,7 @@ class RepairAgent:
                     {"role": "system", "content": "You are an expert at analyzing Next.js and TypeScript build errors."},
                     {"role": "user", "content": prompt}
                 ],
-                model="claude-3-5-sonnet-20240620",
+                model="gpt-4o",
                 response_format=BuildErrorReport
             )
 
@@ -117,29 +82,12 @@ class RepairAgent:
     async def repair_errors(self, error_report: BuildErrorReport) -> bool:
         """Main entry point for repairing code based on build errors."""
         try:
-            total_errors = len([e for e in error_report.errors if e.file != "unknown"])
-            
-            if total_errors == 0:
-                self.console.print("[green]No errors to fix![/green]")
-                return True
-                
-            self.console.print(Panel(
-                f"[bold blue]Starting repair process for {total_errors} error(s)[/bold blue]",
-                border_style="blue"
-            ))
-            
             for error in error_report.errors:
                 if error.file != "unknown":
-                    self.console.print("\n" + "="*80)
-                    self.console.print(self._create_error_table(error))
                     await self._repair_single_error(error)
-                    
             return True
         except Exception as e:
-            self.console.print(Panel(
-                f"[bold red]Error during repair:[/bold red]\n{str(e)}",
-                border_style="red"
-            ))
+            self.console.print(f"[red]Error during repair: {str(e)}[/red]")
             return False
 
     async def _repair_single_error(self, error: BuildError, max_turns: int = 5) -> None:
@@ -160,12 +108,7 @@ class RepairAgent:
         
         write_file:
         - Input: JSON string with path and content
-        Example: {"tool": "write_file", "input": {"path": "path/to/file.ts", "content": "file content here"}, "thought": "Writing fixed content"}
-        
-        create_file:
-        - Input: JSON object with path, content, and optional overwrite flag
-        - Use this when you need to create a new file or directory
-        Example: {"tool": "create_file", "input": {"path": "path/to/file.ts", "content": "file content here", "overwrite": false}, "thought": "Creating new file"}
+        Example: {"tool": "write_file", "input": "{\\"path\\": \\"path/to/file.ts\\", \\"content\\": \\"file content here\\"}", "thought": "Writing fixed content"}
         
         create_backup:
         - Input: Simple string with file path
@@ -176,13 +119,11 @@ class RepairAgent:
         Example: {"tool": "restore_backup", "input": "path/to/file.ts", "thought": "Restoring previous backup"}
         
         generate_fix:
-        - Input: JSON object with file, current_content, and error
-        Example: {"tool": "generate_fix", "input": {"file": "path/to/file.ts", "current_content": "...", "error": "..."}, "thought": "Generating fix for the error"}
+        - Input: JSON string with file, current_content, and error
+        Example: {"tool": "generate_fix", "input": "{\\"file\\": \\"path/to/file.ts\\", \\"current_content\\": \\"..\\", \\"error\\": \\"...\\"}", "thought": "Generating fix for the error"}
 
         Always create a backup before modifying any file.
         Think carefully about each step and explain your reasoning.
-        If you need to create a new file, use the create_file tool instead of write_file.
-        When creating new files, make sure to include all necessary imports and boilerplate code.
         
         Respond in a structured format with:
         {
@@ -213,87 +154,51 @@ class RepairAgent:
         turn = 0
         next_prompt = initial_prompt
         
-        with self.progress:
-            task = self.progress.add_task(f"[cyan]Repairing {error.file}...", total=max_turns)
+        while turn < max_turns:
+            turn += 1
             
-            while turn < max_turns:
-                turn += 1
-                self.progress.update(task, advance=1, description=f"[cyan]Repair attempt {turn}/{max_turns}")
-                
-                # Get next action from AI
-                messages.append({"role": "user", "content": next_prompt})
-                response = await lumos.call_ai_async(
-                    messages=messages,
-                    model="claude-3-5-sonnet-20240620",
-                    response_format=AgentResponse
-                )
-                
-                # Display thought process in a panel
-                if response.thought:
-                    self.console.print(Panel(
-                        f"[bold blue]Thinking:[/bold blue]\n{response.thought}",
-                        border_style="blue"
-                    ))
-                
-                messages.append({"role": "assistant", "content": response.model_dump_json()})
-                
-                # Check for completion
-                if response.status == "fixed":
-                    # Verify fix
-                    self.progress.update(task, description="[yellow]Verifying fix...")
-                    if await self._verify_fix(error.file):
-                        self.progress.update(task, description="[green]Fix verified!")
-                        self.console.print(Panel(
-                            f"[bold green]Successfully fixed error in {error.file}:[/bold green]\n{response.explanation}",
-                            border_style="green"
-                        ))
-                        return
-                    else:
-                        self.progress.update(task, description="[red]Fix verification failed")
-                        next_prompt = "The fix did not resolve the error. Please try another approach."
-                        continue
-                elif response.status == "failed":
-                    self.progress.update(task, description="[red]Repair failed")
-                    self.console.print(Panel(
-                        f"[bold red]Failed to fix error in {error.file}:[/bold red]\n{response.explanation}",
-                        border_style="red"
-                    ))
+            # Get next action from AI
+            messages.append({"role": "user", "content": next_prompt})
+            response = await lumos.call_ai_async(
+                messages=messages,
+                model="gpt-4o",
+                response_format=AgentResponse
+            )
+            self.console.print(f"\n[dim]{response.model_dump_json(indent=2)}[/dim]")
+            messages.append({"role": "assistant", "content": response.model_dump_json()})
+            
+            # Check for completion
+            if response.status == "fixed":
+                # Verify fix by running build error analysis
+                if await self._verify_fix(error.file):
+                    self.console.print(f"[green]Successfully fixed error in {error.file}: {response.explanation}[/green]")
                     return
-                
-                # Execute action if present
-                if response.action:
-                    self.progress.update(task, description=f"[cyan]Executing {response.action.tool}...")
-                    observation = await self._execute_action(response.action)
-                    next_prompt = f"Observation: {observation}"
                 else:
-                    next_prompt = "No action specified. Please provide an action or mark as fixed/failed."
+                    # If verification failed, continue trying
+                    next_prompt = "The fix did not resolve the error. Please try another approach."
+                    continue
+            elif response.status == "failed":
+                self.console.print(f"[red]Failed to fix error in {error.file}: {response.explanation}[/red]")
+                return
+                
+            # Execute action if present
+            if response.action:
+                observation = await self._execute_action(response.action)
+                next_prompt = f"Observation: {observation}"
+            else:
+                next_prompt = "No action specified. Please provide an action or mark as fixed/failed."
 
     async def _verify_fix(self, file_path: str) -> bool:
         """Verify if a fix resolved the error by analyzing build output"""
         try:
             # Run build and analyze errors
-            with self.progress:
-                build_task = self.progress.add_task("[yellow]Running build...", total=1)
-                build_output = await self._run_build()
-                self.progress.update(build_task, advance=1)
-                
-                analyze_task = self.progress.add_task("[yellow]Analyzing build output...", total=1)
-                error_report = await self._analyze_build_errors_with_ai(build_output)
-                self.progress.update(analyze_task, advance=1)
+            build_output = await self._run_build()
+            error_report = await self._analyze_build_errors_with_ai(build_output)
             
             # Check if the file still has errors
-            has_errors = any(error.file == file_path for error in error_report.errors)
-            if has_errors:
-                self.console.print(Panel(
-                    "[yellow]Verification failed - errors still present[/yellow]",
-                    border_style="yellow"
-                ))
-            return not has_errors
+            return not any(error.file == file_path for error in error_report.errors)
         except Exception as e:
-            self.console.print(Panel(
-                f"[bold red]Error during verification:[/bold red]\n{str(e)}",
-                border_style="red"
-            ))
+            self.console.print(f"[yellow]Error verifying fix: {str(e)}[/yellow]")
             return False
 
     async def _execute_action(self, action: AgentAction) -> str:
@@ -304,60 +209,22 @@ class RepairAgent:
         try:
             # Parse input as JSON if it's a JSON string
             input_data = action.input
-            if action.tool in ["write_file", "generate_fix", "create_file"]:
+            if action.tool in ["write_file", "generate_fix"]:
                 try:
-                    input_data = json.loads(action.input) if isinstance(action.input, str) else action.input
+                    input_data = json.loads(action.input)
                 except json.JSONDecodeError:
                     return f"Error: Input for {action.tool} must be valid JSON"
             
-            # Execute the action with progress indicator
-            with self.progress:
-                task = self.progress.add_task(
-                    f"[cyan]Executing {action.tool}...",
-                    total=1
-                )
-                result = await self.tools[action.tool](input_data)
-                self.progress.update(task, advance=1)
-            
-            # Display the result in a nice format
-            if hasattr(result, 'model_dump_json'):
-                result_dict = json.loads(result.model_dump_json())
-                if result_dict.get('success', False):
-                    self.console.print(Panel(
-                        f"[green]{result_dict.get('message', 'Operation successful')}[/green]",
-                        border_style="green"
-                    ))
-                else:
-                    self.console.print(Panel(
-                        f"[red]{result_dict.get('message', 'Operation failed')}[/red]",
-                        border_style="red"
-                    ))
-                return result.model_dump_json()
-            return str(result)
+            result = await self.tools[action.tool](input_data)
+            return result.model_dump_json() if hasattr(result, 'model_dump_json') else str(result)
         except Exception as e:
-            error_msg = f"Error executing {action.tool}: {str(e)}"
-            self.console.print(Panel(error_msg, border_style="red"))
-            return error_msg
+            return f"Error executing {action.tool}: {str(e)}"
             
     async def _read_file(self, file_path: str) -> FileOperation:
         """Read the current content of a file."""
         try:
             full_path = self.project_path / file_path
             content = full_path.read_text()
-            
-            # Display file content in a syntax-highlighted panel
-            if content.strip():
-                self.console.print(Panel(
-                    Syntax(
-                        content,
-                        "python" if file_path.endswith('.py') else "typescript",
-                        theme="monokai",
-                        line_numbers=True
-                    ),
-                    title=f"[bold blue]{file_path}[/bold blue]",
-                    border_style="blue"
-                ))
-            
             return FileOperation(
                 success=True,
                 message="File read successfully",
@@ -457,7 +324,7 @@ class RepairAgent:
                     {"role": "system", "content": "You are an expert Next.js TypeScript developer. Provide only the fixed code with no explanation."},
                     {"role": "user", "content": prompt}
                 ],
-                model="claude-3-5-sonnet-20240620"
+                model="gpt-4o"
             )
             
             # Clean up the response
@@ -474,65 +341,4 @@ class RepairAgent:
                 success=False,
                 message=f"Error generating fix: {str(e)}",
                 path=data['file']
-            )
-
-    async def _create_file(self, data: Dict[str, str]) -> FileOperation:
-        """Create a new file with the specified content.
-        
-        Args:
-            data: Dictionary containing:
-                - path: The file path to create
-                - content: The content to write to the file
-                - overwrite: (optional) Whether to overwrite if file exists
-        """
-        try:
-            file_path = self.project_path / data["path"]
-            
-            # Check if file exists and handle overwrite
-            if file_path.exists() and not data.get("overwrite", False):
-                return FileOperation(
-                    success=False,
-                    message=f"File {data['path']} already exists. Set overwrite=true to replace it.",
-                    path=data["path"]
-                )
-            
-            # Create parent directories if they don't exist
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Write the file
-            with self.progress:
-                task = self.progress.add_task(f"[cyan]Creating new file {data['path']}...", total=1)
-                
-                # Create backup if file exists
-                if file_path.exists():
-                    await self._create_backup(data["path"])
-                
-                # Write the new content
-                file_path.write_text(data["content"])
-                self.progress.update(task, advance=1)
-            
-            # Show the created file
-            if data["content"].strip():
-                self.console.print(Panel(
-                    Syntax(
-                        data["content"],
-                        "python" if data["path"].endswith('.py') else "typescript",
-                        theme="monokai",
-                        line_numbers=True
-                    ),
-                    title=f"[bold green]✨ Created {data['path']}[/bold green]",
-                    border_style="green"
-                ))
-            
-            return FileOperation(
-                success=True,
-                message=f"Successfully created file {data['path']}",
-                path=data["path"],
-                content=data["content"]
-            )
-        except Exception as e:
-            return FileOperation(
-                success=False,
-                message=f"Error creating file: {str(e)}",
-                path=data["path"]
             )
