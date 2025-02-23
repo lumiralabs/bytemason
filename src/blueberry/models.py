@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Any
 from enum import Enum
 
 
@@ -78,8 +78,43 @@ class GeneratedCode(BaseModel):
 
 class BuildError(BaseModel):
     file: str = Field(..., description="File path where error occurred")
-    line: Optional[int] = Field(None, description="Line number of error")
-    column: Optional[int] = Field(None, description="Column number of error")
+    line: int = Field(None, description="Line number of error")
+    column: int = Field(None, description="Column number of error")
     message: str = Field(..., description="Error message")
-    code: Optional[str] = Field(None, description="Error code if available")
     type: str = Field(..., description="Error type (e.g., 'TypeError', 'SyntaxError')")
+    code: str = Field(None, description="Error code if available")
+
+
+class BuildErrorReport(BaseModel):
+    errors: list[BuildError] = Field(..., description='List of build errors extracted from logs')
+
+class ErrorAnalysis(BaseModel):
+    """AI analysis of a build error"""
+    cause: str = Field(..., description="Root cause of the error")
+    suggested_fix: str = Field(..., description="Suggested approach to fix the error") 
+    required_imports: list[str] = Field([], description="Any imports that need to be added")
+    dependencies: list[str] = Field([], description="Any npm dependencies that need to be installed")
+
+
+class AgentAction(BaseModel):
+    """Action to be taken by the repair agent"""
+    tool: str = Field(..., description="Name of the tool to use")
+    input: str = Field(..., description="Input for the tool as a string")
+    thought: str = Field(..., description="Reasoning behind this action")
+
+
+class AgentResponse(BaseModel):
+    """Response from the repair agent's AI"""
+    thought: str = Field(..., description="Current thinking about the problem")
+    action: Optional[AgentAction] = Field(None, description="Next action to take, if any")
+    status: str = Field(..., description="Current status: 'thinking', 'fixed', 'failed'")
+    explanation: Optional[str] = Field(None, description="Explanation of the status if fixed/failed")
+
+
+class FileOperation(BaseModel):
+    """Result of a file operation"""
+    success: bool = Field(..., description="Whether the operation succeeded")
+    message: str = Field(..., description="Description of what happened")
+    path: Optional[str] = Field(None, description="Path to the file that was operated on")
+    content: Optional[str] = Field(None, description="File content if relevant")
+

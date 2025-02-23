@@ -6,6 +6,7 @@ from blueberry.models import (
     FileMode,
     FileContent,
     BuildError,
+    BuildErrorReport
 )
 from rich.console import Console
 from rich.prompt import Prompt
@@ -22,6 +23,7 @@ import shutil
 from rich.progress import SpinnerColumn, TextColumn
 import asyncio
 from fnmatch import fnmatch
+from blueberry.repair_agent import RepairAgent
 
 
 class ProjectBuilder:
@@ -294,6 +296,7 @@ class CodeAgent:
         self.ignore_patterns = ignore_patterns or []
         self.existing_files = self._map_existing_files()
         self.current_dir = Path(__file__).parent
+        self.repair_agent = RepairAgent(project_path)
 
         # Create logs directory
         log_dir = Path("logs")
@@ -488,122 +491,100 @@ class CodeAgent:
             full_output = stdout.decode() + "\n" + stderr.decode()
             
             if process.returncode != 0:
-                errors = self._parse_build_output(full_output)
-                if errors:
-                    self.console.print(f"[yellow]Build failed with {len(errors)} errors[/yellow]")
-                    for error in errors:
-                        self.console.print(f"[red]Error in {error.file}: {error.message}[/red]")
+                # First try AI-powered error analysis
+                try:
+                    errors = await self._analyze_build_errors_with_ai(full_output)
+                    if errors:
+                        self.console.print(f"[yellow]Build failed with {len(errors.errors)} errors[/yellow]")
+                        for error in errors.errors:
+                            self.console.print(f"[red]Error in {error.file}: {error.message}[/red]")
+                        return errors.errors
+                except Exception as e:
+                    self.console.print(f"[yellow]AI error analysis failed, falling back to basic parsing: {str(e)}[/yellow]")
                 return errors
-
-            self.console.print("[green]Build completed successfully[/green]")
-            return []
 
         except Exception as e:
             self.console.print(f"[red]Build process failed: {str(e)}[/red]")
             return []
 
+    async def _analyze_build_errors_with_ai(self, build_output: str) -> BuildErrorReport:
+        """Use AI to analyze build errors more intelligently"""
+        try:
+            prompt = f"""Analyze this Next.js build output and extract all errors.
+            For each error, identify:
+            1. The file path (relative to project root)
+            2. The error message
+            3. The error type (typescript, runtime, etc)
+            4. Line and column numbers if available
+            5. Any relevant error code
+
+            Build Output:
+            {build_output}"""
+
+            response = await lumos.call_ai_async(
+                messages=[
+                    {"role": "system", "content": "You are an expert at analyzing Next.js and TypeScript build errors."},
+                    {"role": "user", "content": prompt}
+                ],
+                model="gpt-4o",
+                response_format=BuildErrorReport
+            )
+
+            print(response);
+
+
+            return response
+
+        except Exception as e:
+            self.console.print(f"[yellow]AI error analysis failed: {str(e)}[/yellow]")
+            return []
+
     def _parse_build_output(self, output: str) -> List[BuildError]:
-        """Parse build output to extract all errors"""
+        """Basic fallback parser for build output to extract errors"""
         errors = []
-        current_file = "unknown"
-        current_error_lines = []
-        
-        # Split output into lines and process
         lines = output.splitlines()
         
-        # Track Next.js specific error context
-        in_error_block = False
-        error_block_lines = []
-        current_error = None
+        current_file = None
+        current_error = []
+        in_error = False
         
         for line in lines:
             line = line.strip()
             if not line:
                 continue
 
-            # Detect start of Next.js error block
-            if line == "Failed to compile.":
-                in_error_block = True
+            # Start of error block
+            if "Failed to compile" in line:
+                in_error = True
                 continue
 
-            if in_error_block:
-                # Detect file path at start of error
-                if line.startswith("./"):
-                    # If we were collecting a previous error, save it
-                    if error_block_lines:
-                        errors.append(BuildError(
-                            file=current_file,
-                            message="\n".join(error_block_lines),
-                            type="next.js",
-                            line=current_error.get("line", 0) if current_error else 0,
-                            column=current_error.get("column", 0) if current_error else 0,
-                            code=current_error.get("code", "") if current_error else ""
-                        ))
-                        error_block_lines = []
-                        current_error = None
-                    
-                    current_file = line.strip("./")
-                    continue
+            if not in_error:
+                continue
 
-                # Parse Next.js specific error information
-                if line.startswith("Error:"):
-                    current_error = {"type": "error"}
-                    error_block_lines.append(line.replace("Error:", "").strip())
-                    continue
-                
-                # Extract line and column numbers from code frame
-                if ",-[" in line:
-                    match = re.search(r'\[.*:(\d+):(\d+)\]', line)
-                    if match and current_error:
-                        current_error["line"] = int(match.group(1))
-                        current_error["column"] = int(match.group(2))
-                    continue
+            # New file indicator
+            if line.startswith("./") or line.startswith("../") or line.endswith(".ts") or line.endswith(".tsx"):
+                if current_file and current_error:
+                    errors.append(BuildError(
+                        file=current_file,
+                        message="\n".join(current_error),
+                        type="error",
+                        line=0,
+                        column=0,
+                        code=""
+                    ))
+                    current_error = []
+                current_file = line.lstrip("./")
+                continue
 
-                # Collect error message lines
-                if current_error:
-                    # Skip the code frame lines
-                    if not any(skip in line for skip in [',-[', '| ', ':`----']):
-                        error_block_lines.append(line)
+            # Error message lines
+            if current_file and (line.startswith("Error:") or "Type" in line or "error" in line.lower()):
+                current_error.append(line)
 
-            # Regular error line processing
-            elif any(indicator in line.lower() for indicator in ['error', 'failed', 'exception']):
-                # Try to extract file path if present
-                file_match = re.search(r'[./\\]?([^/\\:]+\.[a-zA-Z]+)[:\(]?(\d+)?(?:[:\(](\d+)?)?', line)
-                if file_match:
-                    if current_error_lines:
-                        errors.append(BuildError(
-                            file=current_file,
-                            message="\n".join(current_error_lines),
-                            type="error",
-                            line=int(file_match.group(2) or 0),
-                            column=int(file_match.group(3) or 0),
-                            code=""
-                        ))
-                        current_error_lines = []
-                    
-                    current_file = file_match.group(1)
-                    current_error_lines = [line]
-                else:
-                    if current_error_lines:
-                        current_error_lines.append(line)
-                    else:
-                        current_file = "unknown"
-                        current_error_lines = [line]
-
-        # Add any remaining error
-        if error_block_lines:
+        # Add final error if exists
+        if current_file and current_error:
             errors.append(BuildError(
                 file=current_file,
-                message="\n".join(error_block_lines),
-                type="next.js",
-                line=current_error.get("line", 0) if current_error else 0,
-                column=current_error.get("column", 0) if current_error else 0,
-                code=current_error.get("code", "") if current_error else ""
-            ))
-        elif current_error_lines:
-            errors.append(BuildError(
-                file=current_file,
-                message="\n".join(current_error_lines),
+                message="\n".join(current_error),
                 type="error",
                 line=0,
                 column=0,
@@ -613,202 +594,19 @@ class CodeAgent:
         return errors
 
     async def _repair_code(self, errors: List[BuildError]):
-        """Fix build errors using AI with ReAct pattern"""
-        # Group errors by file to handle multiple errors in same file together
-        errors_by_file = {}
-        for error in errors:
-            if error.file != "unknown":
-                if error.file not in errors_by_file:
-                    errors_by_file[error.file] = []
-                errors_by_file[error.file].append(error)
-
-        for file_path, file_errors in errors_by_file.items():
-            try:
-                full_path = self.project_path / file_path
-                if not full_path.exists():
-                    continue
-
-                # Create backup before any modifications
-                backup_dir = self.project_path / ".backups"
-                backup_dir.mkdir(parents=True, exist_ok=True)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_path = backup_dir / f"{file_path}.{timestamp}.bak"
-                backup_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(full_path, backup_path)
-
-                # Read the entire file content
-                current_content = full_path.read_text()
+        """Fix build errors using the RepairAgent"""
+        try:
+            # Create error report
+            error_report = BuildErrorReport(errors=errors)
+            
+            # Use repair agent to fix errors
+            success = await self.repair_agent.repair_errors(error_report)
+            
+            if not success:
+                self.console.print("[red]Failed to repair all errors[/red]")
                 
-                # Check if this is a Next.js Server/Client Component issue
-                is_client_component_issue = any(
-                    "It only works in a Client Component" in error.message 
-                    for error in file_errors
-                )
-
-                if is_client_component_issue:
-                    # Simplified prompt for Client Component conversion
-                    prompt = f"""Fix Next.js Client Component error in this file by converting it to a Client Component.
-
-                        File: {file_path}
-
-                        Current content:
-                        ```typescript
-                        {current_content}
-                        ```
-
-                        Requirements:
-                        1. Add 'use client' directive at the very top of the file
-                        2. Keep all existing imports and functionality
-                        3. Ensure proper TypeScript types
-                        4. Return valid JSX/TSX
-                        5. Format the code properly
-
-                        Provide ONLY the complete fixed code without any explanations or markdown formatting."""
-                else:
-                    # Format errors for standard prompt
-                    error_descriptions = "\n".join([
-                        f"Error {i+1}:\n"
-                        f"  Type: {error.type}\n"
-                        f"  Message: {error.message}\n"
-                        f"  Line: {error.line}\n"
-                        f"  Column: {error.column}\n"
-                        f"  Code: {error.code}"
-                        for i, error in enumerate(file_errors)
-                    ])
-
-                    prompt = f"""You are an expert Next.js and TypeScript developer. Fix the following errors in this file using careful reasoning.
-
-                        File: {file_path}
-                        Number of errors: {len(file_errors)}
-
-                        Errors to fix:
-                        {error_descriptions}
-
-                        Current file content:
-                        ```typescript
-                        {current_content}
-                        ```
-
-                        Follow this exact format in your response:
-                        1. ANALYSIS
-                        Analyze each error and explain what's wrong. List any dependencies or imports that might be missing.
-
-                        2. SOLUTION PLAN
-                        Outline the steps needed to fix all errors. Consider how fixes might interact with each other.
-
-                        3. IMPLEMENTATION
-                        Provide the complete fixed file content. Include ALL necessary imports and dependencies.
-
-                        4. VERIFICATION STEPS
-                        List specific things to check to ensure the fix worked.
-
-                        Begin your response with "ANALYSIS:" and clearly separate each section."""
-
-                # Try repair with up to 3 attempts
-                max_attempts = 3
-                for attempt in range(max_attempts):
-                    try:
-                        response = await lumos.call_ai_async(
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": """You are an expert Next.js TypeScript developer specializing in fixing build errors.
-                                    For Client Component issues:
-                                    - Always start with 'use client' directive
-                                    - Ensure proper TypeScript types
-                                    - Return valid JSX/TSX
-                                    - Format code properly with consistent indentation"""
-                                },
-                                {"role": "user", "content": prompt}
-                            ],
-                            model="gpt-4o",
-                        )
-
-                        if is_client_component_issue:
-                            # For Client Component issues, clean and validate the response
-                            implementation = response.strip()
-                            
-                            # Remove any markdown code blocks
-                            implementation = re.sub(r'^```[\w]*\n|```$', '', implementation, flags=re.MULTILINE).strip()
-                            
-                            # Ensure 'use client' directive is properly formatted
-                            if not implementation.startswith('"use client"') and not implementation.startswith("'use client'"):
-                                implementation = '"use client";\n\n' + implementation
-                            
-                            # Basic syntax validation
-                            try:
-                                import ast
-                                ast.parse(implementation)
-                            except SyntaxError as e:
-                                self.console.print(f"[yellow]Syntax error in generated code: {str(e)}[/yellow]")
-                                continue
-                        else:
-                            # Parse sections from response for non-client-component issues
-                            sections = {}
-                            current_section = None
-                            current_content = []
-                            
-                            for line in response.split('\n'):
-                                if line.strip().upper() in ['ANALYSIS:', 'SOLUTION PLAN:', 'IMPLEMENTATION:', 'VERIFICATION STEPS:']:
-                                    if current_section:
-                                        sections[current_section] = '\n'.join(current_content).strip()
-                                    current_section = line.strip().upper().replace(':', '')
-                                    current_content = []
-                                else:
-                                    current_content.append(line)
-                            
-                            if current_section:
-                                sections[current_section] = '\n'.join(current_content).strip()
-
-                            # Log the repair attempt
-                            self._log_ai_response(
-                                prompt,
-                                {
-                                    "attempt": attempt + 1,
-                                    "analysis": sections.get('ANALYSIS', ''),
-                                    "solution_plan": sections.get('SOLUTION PLAN', ''),
-                                    "verification": sections.get('VERIFICATION STEPS', '')
-                                },
-                                "repair_attempt"
-                            )
-
-                            implementation = sections.get('IMPLEMENTATION', '').strip()
-                            implementation = re.sub(r'^```[\w]*\n|```$', '', implementation, flags=re.MULTILINE).strip()
-
-                        if not implementation:
-                            raise ValueError("No implementation provided in AI response")
-
-                        # Apply the fix
-                        full_path.write_text(implementation)
-                        self.console.print(f"[green]Applied fix attempt {attempt + 1} for {file_path}[/green]")
-
-                        # Verify the fix worked
-                        test_errors = await self._run_build()
-                        remaining_errors = [e for e in test_errors if e.file == file_path]
-                        
-                        if not remaining_errors:
-                            self.console.print(f"[green]Successfully fixed all errors in {file_path}[/green]")
-                            break
-                        else:
-                            self.console.print(f"[yellow]Fix attempt {attempt + 1} didn't resolve all errors, trying again...[/yellow]")
-                            if attempt == max_attempts - 1:
-                                # Restore from backup on final failed attempt
-                                shutil.copy2(backup_path, full_path)
-                                self.console.print(f"[red]Failed to fix {file_path} after {max_attempts} attempts. Restored backup.[/red]")
-
-                    except Exception as e:
-                        self.console.print(f"[red]Error in fix attempt {attempt + 1} for {file_path}: {str(e)}[/red]")
-                        if attempt == max_attempts - 1:
-                            # Restore from backup
-                            shutil.copy2(backup_path, full_path)
-                            self.console.print(f"[red]Failed to fix {file_path}. Restored backup.[/red]")
-
-            except Exception as e:
-                self.console.print(f"[red]Failed to process {file_path}: {str(e)}[/red]")
-                # Restore from backup if it exists
-                if 'backup_path' in locals() and backup_path.exists():
-                    shutil.copy2(backup_path, full_path)
-                    self.console.print(f"[yellow]Restored backup for {file_path}[/yellow]")
+        except Exception as e:
+            self.console.print(f"[red]Error during repair: {str(e)}[/red]")
 
     def _get_files_structure(self) -> str:
         """Get a string representation of existing files structure"""
