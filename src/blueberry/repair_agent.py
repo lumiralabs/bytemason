@@ -35,7 +35,7 @@ class RepairAgent:
     async def _analyze_build_errors_with_ai(self, build_output: str) -> BuildErrorReport:
         """Use AI to analyze build errors more intelligently"""
         try:
-            prompt = f"""Analyze this Next.js build output and extract all errors.
+            prompt = f"""Analyze this Typescript Next.js 14 app router build output and extract all errors.
             For each error, identify:
             1. The file path (relative to project root)
             2. The error message
@@ -48,7 +48,7 @@ class RepairAgent:
 
             response = await lumos.call_ai_async(
                 messages=[
-                    {"role": "system", "content": "You are an expert at analyzing Next.js and TypeScript build errors."},
+                    {"role": "system", "content": "You are an expert at analyzing Next.js 14 app router and TypeScript build errors."},
                     {"role": "user", "content": prompt}
                 ],
                 model="gpt-4o",
@@ -92,7 +92,7 @@ class RepairAgent:
 
     async def _repair_single_error(self, error: BuildError, max_turns: int = 5) -> None:
         """Handle a single error using the agent loop."""
-        system_prompt = """You are an expert Next.js and TypeScript developer specializing in fixing build errors.
+        system_prompt = """You are an expert Next.js 14 app router and TypeScript developer specializing in fixing build errors.
         You run in a loop of Thought, Action, PAUSE, Observation.
         At each step, you:
         1. Think about what needs to be done
@@ -321,7 +321,7 @@ class RepairAgent:
             
             response = await lumos.call_ai_async(
                 messages=[
-                    {"role": "system", "content": "You are an expert Next.js TypeScript developer. Provide only the fixed code with no explanation."},
+                    {"role": "system", "content": "You are a senior expert Next.js 14 app router and TypeScript developer who first identifies the root cause of the error and then plans out a fix and then implement it with all the edge cases in mind. Provide only the fixed code with no explanation."},
                     {"role": "user", "content": prompt}
                 ],
                 model="gpt-4o"

@@ -37,7 +37,8 @@ class ProjectBuilder:
                 messages=[
                     {
                         "role": "system",
-                        "content": """Analyze user requests for Next.js 14 + Supabase applications and extract core features.
+                        "content": """Yor are a senior product planner who creates a detailed requirement analysis and creates a list of important features, you don't do in fancy less useful features you just focus on core features. 
+                        Analyze user requests for typescript, Next.js 14 app router + Supabase applications and extract core features.
                         Focus on:
                         1. Core functionality and key features
                         2. Required auth/security features
@@ -200,7 +201,9 @@ class ProjectBuilder:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"""Generate a detailed specification for a Next.js 14 App router + Supabase application.
+                        "content": f""" You are a senior NextJS 14 + Supabase developer, you know the complexities of developing different parts and features of an app, you don't just start writing, 
+                        you do a risk and feasibility analysis first and then come up with a detailed specification of the whole app, you know that every single word you write will impact how the junior devs will think so you try to be as precise and descriptive as possible.
+                        Generate a detailed specification for a Next.js 14 App router + Supabase application.
 
                         You currently have a boilerplate with all the basic setup done, you just need to add the features requested by the user.
                         {core_prompt}
@@ -363,55 +366,232 @@ class CodeAgent:
                 return False
 
     async def _generate_structured_code(self) -> GeneratedCode:
-        """Generate code with structured output format"""
-        core_prompt = (self.current_dir / "prompts" / "core_prompt.md").read_text()
+        """Generate code with maximum context flow: API -> Components -> Pages"""
+        all_files = []
+        
+        # Get core prompt
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(current_dir, "prompts", "core_prompt.md"), "r") as f:
+            core_prompt = f.read()
+        
+        # 1. Generate API routes first
+        api_files = await self._generate_api_routes(core_prompt)
+        all_files.extend(api_files)
+        
+        # 2. Generate components with API context
+        component_files = await self._generate_components(core_prompt, api_files)
+        all_files.extend(component_files)
+        
+        # 3. Generate pages with full context
+        page_files = await self._generate_pages(core_prompt, api_files, component_files)
+        all_files.extend(page_files)
+        
+        return GeneratedCode(files=all_files)
 
-        # Read existing migration file if it exists
-        migration_file = self.project_path / "supabase" / "migrations"
-        migration_sql = ""
-        for file in migration_file.glob("*_initial_schema.sql"):
-            migration_sql = file.read_text()
-            break  # Take the first matching file
+    async def _generate_api_routes(self, core_prompt: str) -> List[FileContent]:
+        """Generate all API routes with database context"""
+        prompt = f"""As a Next.js 14 Route Handler specialist, generate all API routes.
 
-        prompt = f"""Based on the following project specification, generate or modify files for a Next.js 14 application.
-        The application already has a basic structure with auth and Supabase integration.
-        
-        Project Spec:
-        {self.spec.model_dump_json(indent=2)}
-        
-        Existing files structure:
-        {self._get_files_structure()}
-        
-        Database Schema (Supabase):
-        ```sql
-        {migration_sql}
+        Critical Requirements:
+        1. Use Route Handlers (app/api/*/route.ts), NOT pages/api
+        2. Each handler must:
+           - Use proper HTTP methods (GET, POST, PUT, DELETE)
+           - Have proper TypeScript types for request/response
+           - Include error handling with appropriate status codes
+           - don't use any ORM, just use the normal supabase client
+        3. Follow these patterns:
+           - Use NextResponse from 'next/server'
+           - Handle authentication via middleware (already implemented)
+           - Include proper CORS headers where needed
+           - Use edge runtime where beneficial
+        4. Security considerations:
+           - Validate all inputs
+           - Check user permissions
+           - Sanitize responses
+           - Handle rate limiting
+
+        Example Route Handler Structure:
+
+        ```typescript
+        import {{ NextResponse }} from 'next/server'
+        import {{ createClient }} from '@/libs/supabase/server';
+
+        export async function POST(req: Request) {{
+          try {{
+            const supabase = createClient();
+            const {{ data: {{ session }} }} = await supabase.auth.getSession();
+            const body = await request.json();
+            // Handler logic
+            const data = await supabase
+            .from('table_name')
+            .select('*')
+            .eq('id', body.id)
+            .single();
+
+            return NextResponse.json(data);
+          }} catch (error) {{
+            return NextResponse.json(
+              {{ error: 'Validation failed' }},
+              {{ status: 400 }}
+            )
+          }}
+        }}
         ```
-        
-        Boilerplate Context:
-        {core_prompt}
-        
-        Generate all the necessary new files (components, pages, api routes) or modifications to existing files.
-        Make sure to:
-        1. Use the exact table names and columns from the SQL schema
-        2. Follow the database relationships defined in migrations
-        3. Include proper type definitions for database tables
-        4. Add proper error handling for database operations
-        Do not regenerate unchanged boilerplate files.
-        """
 
-        response = await lumos.call_ai_async(
+        Spec:
+        {json.dumps(self.spec.model_dump(), indent=2)}
+        
+        {core_prompt}
+        """
+        
+        return (await lumos.call_ai_async(
             messages=[
-                {"role": "system", "content": "You are an expert Next.js developer..."},
-                {"role": "user", "content": prompt},
+                {"role": "system", "content": "You are a Next.js 14 Route Handler specialist focusing on type-safety and security."},
+                {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o",
-        )
+            model="gpt-4o"
+        )).files
 
-        # Log the raw response
-        self._log_ai_response(prompt, response.model_dump(), "initial_generation")
 
-        return response
+    async def _generate_components(self, core_prompt: str, api_files: List[FileContent]) -> List[FileContent]:
+        """Generate components with API context"""
+        api_context = "\n\n".join(f"// {f.path}\n{f.content}" for f in api_files)
+        
+        prompt = f"""As a Next.js 14 Component architect, generate all React components.
+
+        Critical Requirements:
+        1. Component Location:
+           - ALL components MUST be in components/ directory
+           - Group by feature (e.g., components/todos/, components/profile/)
+           - NO components in app/ directory
+           
+        2. Component Architecture:
+           - Server Components by default (no "use client" unless needed)
+           - Client Components only for:
+             * Interactivity (onClick, onChange)
+             * Browser APIs
+             * React hooks
+             * Client state
+           - Use shadcn/ui components from @/components/ui/
+           
+        3. Data Handling:
+           - Use Server Components for data fetching
+           - Use createClient() from '@/libs/supabase/server' for server components
+           - Use createClient() from '@/libs/supabase/client' for client components
+           - Implement proper loading states
+           - Handle errors gracefully
+           
+        Example Component Structure:
+        ```typescript
+        // components/todos/TodoList.tsx
+        import {{ createClient }} from '@/libs/supabase/server'
+        import {{ Button }} from '@/components/ui/button'
+
+        interface TodoListProps {{
+          initialTodos?: Todo[]
+        }}
+
+        export default async function TodoList({{ props }}: TodoListProps) {{
+          const supabase = createClient()
+          // Component logic
+        }}
+        ```
+
+        Available Route Handlers:
+        {api_context}
+
+        Spec:
+        {json.dumps(self.spec.model_dump(), indent=2)}
+        
+        {core_prompt}
+        """
+        
+        return (await lumos.call_ai_async(
+            messages=[
+                {"role": "system", "content": "You are a Next.js 14 Component architect specializing in Server and Client Components."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format=GeneratedCode,
+            model="gpt-4o"
+        )).files
+
+    async def _generate_pages(
+        self, 
+        core_prompt: str,
+        api_files: List[FileContent],
+        component_files: List[FileContent]
+    ) -> List[FileContent]:
+        """Generate pages with full context"""
+        context = {
+            'api': "\n\n".join(f"// {f.path}\n{f.content}" for f in api_files),
+            'components': "\n\n".join(f"// {f.path}\n{f.content}" for f in component_files)
+        }
+        
+        prompt = f"""As a Next.js 14 App Router specialist, generate all pages.
+
+        Critical Requirements:
+        1. File Structure:
+           - Use app/[route]/page.tsx for pages
+           - Include layout.tsx for shared UI
+           - Add loading.tsx for suspense in root directory app/loading.tsx
+           - Add error.tsx for error handling in root directory app/error.tsx
+           - Use not-found.tsx for 404s in root directory app/not-found.tsx
+           - Make a landing page in the root of the app app/page.tsx
+           
+        2. Page Architecture:
+           - Server Components by default
+           - Import components from @/components/
+           - Use proper metadata exports
+           - Implement proper auth checks
+           
+        3. Data Flow:
+           - Fetch data in Server Components
+           - Pass data down as props
+           - Use suspense boundaries
+           - Handle loading states
+           
+        4. Routing & Layout:
+           - Use proper route grouping
+           - Handle dynamic segments
+           - Use proper navigation patterns
+           - Use useRouter for navigation imported from next/navigation
+           - Use createClient() from '@/libs/supabase/server'
+
+        Example Page Structure:
+        ```typescript
+       
+        import {{ createClient }} from '@/libs/supabase/server'
+        import {{ TodoList }} from '@/components/todos/TodoList'
+        
+        
+        export default async function DashboardPage() {{
+          const supabase = createClient()
+          // Page logic
+          return <TodoList />
+        }}
+        ```
+
+        Available Components:
+        {context['components']}
+
+        Available Route Handlers:
+        {context['api']}
+
+        Spec:
+        {json.dumps(self.spec.model_dump(), indent=2)}
+        
+        {core_prompt}
+        """
+        
+        return (await lumos.call_ai_async(
+            messages=[
+                {"role": "system", "content": "You are a Next.js 14 App Router specialist focusing on proper page structure and data flow."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format=GeneratedCode,
+            model="gpt-4o"
+        )).files
 
     async def _apply_single_change(self, file: FileContent):
         """Apply a single file change"""

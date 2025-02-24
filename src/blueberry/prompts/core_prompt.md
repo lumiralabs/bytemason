@@ -16,40 +16,8 @@ Use the App Router pattern instead of the Pages Router for better organization a
 - Use `loading.tsx` for suspense boundaries
 - Use `error.tsx` for error handling
 - Place API routes under `app/api/`
+- auth page + endpoints are already done so dont add anything related to it like signin login signup register.
 
-## Project Structure DOs and DON'Ts
-
-✅ DO example:
-├── app/
-│ ├── (auth)/ # Auth group routes
-│ │ ├── login/
-│ │ │ └── page.tsx
-│ │ └── register/
-│ │ └── page.tsx
-│ ├── dashboard/ # Dashboard routes
-│ │ ├── page.tsx
-│ │ ├── layout.tsx
-│ │ └── settings/
-│ │ └── page.tsx
-│ ├── api/ # API routes
-│ │ └── users/
-│ │ └── route.ts
-│ ├── layout.tsx # Root layout
-│ └── page.tsx # Home page
-└── components/ # Shared components
-├── Button.tsx
-└── Header.tsx
-
-❌ DON'T example:
-└── pages/ # Don't use Pages Router
-├── \_app.tsx
-├── index.tsx
-├── login.tsx
-├── api/
-│ └── users.ts
-└── components/ # Don't mix components with pages
-├── Button.tsx
-└── Header.tsx
 
 ## KEY POINTS TO ALWAYS FOLLOW
 
@@ -97,7 +65,6 @@ currently installed packages:
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "next lint"
   },
@@ -397,10 +364,4 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 ```
 
-<<<<<<< Updated upstream
-
-
 Always use the most latest nextJS 14 app router conventions in all cases weather imports and exports,folder structure, api structure, etc.
-=======
-Always use the most latest nextJS 14 app router conventions in all cases, whether imports, exports,folder structure, api structure, etc.
->>>>>>> Stashed changes
