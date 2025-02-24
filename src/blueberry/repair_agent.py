@@ -29,7 +29,8 @@ class RepairAgent:
             "write_file": self._write_file,
             "create_backup": self._create_backup,
             "restore_backup": self._restore_backup,
-            "generate_fix": self._generate_fix
+            "generate_fix": self._generate_fix,
+            "analyze_dependencies": self._analyze_dependencies  # Add new tool
         }
 
     async def _analyze_build_errors_with_ai(self, build_output: str) -> BuildErrorReport:
@@ -92,7 +93,7 @@ class RepairAgent:
 
     async def _repair_single_error(self, error: BuildError, max_turns: int = 5) -> None:
         """Handle a single error using the agent loop."""
-        system_prompt = """You are an expert Next.js and TypeScript developer specializing in fixing build errors.
+        system_prompt = """You are an expert Next.js 14 and TypeScript developer specializing in fixing build errors.
         You run in a loop of Thought, Action, PAUSE, Observation.
         At each step, you:
         1. Think about what needs to be done
@@ -121,6 +122,10 @@ class RepairAgent:
         generate_fix:
         - Input: JSON string with file, current_content, and error
         Example: {"tool": "generate_fix", "input": "{\\"file\\": \\"path/to/file.ts\\", \\"current_content\\": \\"..\\", \\"error\\": \\"...\\"}", "thought": "Generating fix for the error"}
+
+        analyze_dependencies:
+        - Input: JSON string with file path and import statement
+        Example: {"tool": "analyze_dependencies", "input": "{\\"file\\": \\"path/to/file.ts\\", \\"import\\": \\"import { Something } from './other'\\"}", "thought": "Checking import dependencies"}
 
         Always create a backup before modifying any file.
         Think carefully about each step and explain your reasoning.
@@ -341,4 +346,102 @@ class RepairAgent:
                 success=False,
                 message=f"Error generating fix: {str(e)}",
                 path=data['file']
+            )
+
+    async def _analyze_dependencies(self, data: Dict[str, str]) -> FileOperation:
+        """Analyze import dependencies and suggest fixes or file creation."""
+        try:
+            file_path = Path(data["file"])
+            import_stmt = data["import"]
+            
+            # Extract the import path
+            import_path_match = re.search(r'from [\'"](.+?)[\'"]', import_stmt)
+            if not import_path_match:
+                return FileOperation(
+                    success=False,
+                    message="Could not parse import statement",
+                    path=str(file_path)
+                )
+                
+            import_path = import_path_match.group(1)
+            
+            # Resolve the full path of the imported file
+            current_dir = (self.project_path / file_path).parent
+            if import_path.startswith('.'):
+                # Relative import
+                target_path = (current_dir / import_path).resolve()
+            else:
+                # Non-relative import (node_modules or absolute)
+                target_path = self.project_path / import_path
+                
+            # Add common extensions if no extension specified
+            if not target_path.suffix:
+                possible_extensions = ['.ts', '.tsx', '.js', '.jsx']
+                for ext in possible_extensions:
+                    if target_path.with_suffix(ext).exists():
+                        target_path = target_path.with_suffix(ext)
+                        break
+                    elif (target_path / 'index').with_suffix(ext).exists():
+                        target_path = (target_path / 'index').with_suffix(ext)
+                        break
+                        
+            # Check if file exists
+            if not target_path.exists():
+                # Generate suggestion for missing file
+                prompt = f"""Create a new TypeScript file for this import:
+                Import statement: {import_stmt}
+                File path: {target_path}
+                
+                Provide only the content for the new file, including proper exports.
+                """
+                
+                response = await lumos.call_ai_async(
+                    messages=[
+                        {"role": "system", "content": "You are an expert TypeScript developer. Generate only the file content."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    model="gpt-4o"
+                )
+                
+                return FileOperation(
+                    success=True,
+                    message="Generated content for missing file",
+                    path=str(target_path.relative_to(self.project_path)),
+                    content=response.strip(),
+                    suggested_action="create_file"
+                )
+            
+            # If file exists, analyze its exports
+            file_content = target_path.read_text()
+            
+            # Extract what's being imported
+            import_items = re.findall(r'{(.+?)}', import_stmt)
+            imported_names = [name.strip() for items in import_items for name in items.split(',')]
+            
+            # Check if the imported items exist in the target file
+            missing_exports = []
+            for name in imported_names:
+                if not re.search(rf'export.+?{name}\b', file_content):
+                    missing_exports.append(name)
+            
+            if missing_exports:
+                return FileOperation(
+                    success=True,
+                    message=f"Missing exports in target file: {', '.join(missing_exports)}",
+                    path=str(target_path.relative_to(self.project_path)),
+                    content=file_content,
+                    suggested_action="add_exports"
+                )
+            
+            return FileOperation(
+                success=True,
+                message="All dependencies verified",
+                path=str(target_path.relative_to(self.project_path))
+            )
+            
+        except Exception as e:
+            return FileOperation(
+                success=False,
+                message=f"Error analyzing dependencies: {str(e)}",
+                path=data["file"]
             )
