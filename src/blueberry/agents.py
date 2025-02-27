@@ -520,7 +520,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o"
+            model="anthropic/claude-3-5-sonnet-20241022"
         )).files
 
 
@@ -583,7 +583,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o"
+            model="anthropic/claude-3-5-sonnet-20241022"
         )).files
 
     async def _generate_pages(
@@ -648,7 +648,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o"
+            model="anthropic/claude-3-5-sonnet-20241022"
         )).files
 
     async def _apply_single_change(self, file: FileContent):
@@ -751,7 +751,7 @@ class CodeAgent:
                     {"role": "system", "content": "You are an expert at analyzing Next.js and TypeScript build errors."},
                     {"role": "user", "content": prompt}
                 ],
-                model="gpt-4o",
+                model="anthropic/claude-3-5-sonnet-20241022",
                 response_format=BuildErrorReport
             )
 
