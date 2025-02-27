@@ -479,7 +479,6 @@ class CodeAgent:
            - Validate all inputs
            - Check user permissions
            - Sanitize responses
-           - Handle rate limiting
 
         Example Route Handler Structure:
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from enum import Enum
 
 
@@ -123,4 +123,23 @@ class FileOperation(BaseModel):
     message: str = Field(..., description="Description of what happened")
     path: Optional[str] = Field(None, description="Path to the file that was operated on")
     content: Optional[str] = Field(None, description="File content if relevant")
+
+
+class DirectoryListing(BaseModel):
+    path: str = Field(..., description="Directory path relative to project root")
+    exists: bool = Field(..., description="Whether the directory exists")
+    is_empty: bool = Field(..., description="Whether the directory is empty")
+    files: List[str] = Field(..., description="List of file paths")
+    directories: List[str] = Field(..., description="List of directory paths")
+    error: str = Field("", description="Error message if something went wrong")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "path": self.path,
+            "exists": self.exists,
+            "is_empty": self.is_empty,
+            "files": self.files,
+            "directories": self.directories,
+            "error": self.error
+        }
 
