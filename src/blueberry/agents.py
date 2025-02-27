@@ -527,62 +527,50 @@ class CodeAgent:
             'components': "\n\n".join(f"// {f.path}\n{f.content}" for f in component_files)
         }
         
-        prompt = f"""As a Next.js 14 App Router specialist, generate all pages.
+        prompt = f"""As a Next.js 14 App Router specialist, generate all necessary pages in strict accordance with the following guidelines.
 
-        Critical Requirements:
-        1. File Structure:
-           - Use app/[route]/page.tsx for pages
-           - Include layout.tsx for shared UI
-           - Add loading.tsx for suspense in root directory app/loading.tsx
-           - Add error.tsx for error handling in root directory app/error.tsx
-           - Use not-found.tsx for 404s in root directory app/not-found.tsx
-           - Make a landing page in the root of the app app/page.tsx
-           
-        2. Page Architecture:
-           - Server Components by default
-           - Import components from @/components/
-           - Use proper metadata exports
-           - Implement proper auth checks
-           
-        3. Data Flow:
-           - Fetch data in Server Components
-           - Pass data down as props
-           - Use suspense boundaries
-           - Handle loading states
-           
-        4. Routing & Layout:
-           - Use proper route grouping
-           - Handle dynamic segments
-           - Use proper navigation patterns
-           - Use useRouter for navigation imported from next/navigation
-           - Use createClient() from '@/libs/supabase/server'
+                Critical Requirements:
+                1. File & Folder Structure:
+                - All pages must reside within the 'app/' directory.
+                - Use 'page.tsx' for public routes.
+                - Include 'layout.tsx' for shared layout.
+                - Provide a landing page at 'app/page.tsx'.
+                2. Page Architecture:
+                - Default to Server Components.
+                - All necessary components must be imported from '@/components/' using correct aliasing.
+                - Ensure proper use of Next.js navigation (e.g., useRouter from 'next/navigation').
+                3. Data Flow & Best Practices:
+                - Fetch data within Server Components and pass it as props.
+                - Implement suspense boundaries and proper loading states.
+                - Validate all client interactions, incorporating appropriate auth checks where needed.
+                4. Example Page Structure:
+                ```typescript
+                import {{ createClient }} from '@/libs/supabase/server';
+                import TodoList from '@/components/todos/TodoList';
 
-        Example Page Structure:
-        ```typescript
-       
-        import {{ createClient }} from '@/libs/supabase/server'
-        import {{ TodoList }} from '@/components/todos/TodoList'
-        
-        
-        export default async function DashboardPage() {{
-          const supabase = createClient()
-          // Page logic
-          return <TodoList />
-        }}
-        ```
+                export default async function DashboardPage() {{
+                const supabase = createClient()
+                // Fetch page-specific data
+                return <TodoList />
+                }}
+                ```
 
-        Available Components:
-        {context['components']}
+                Validation Checklist:
+                - Verify that the file structure adheres to Next.js 14 App Router conventions.
+                - Ensure that every referenced component is imported with the correct alias.
+                - Confirm the existence of key files (layout.tsx, page.tsx) in the proper locations.
 
-        Available Route Handlers:
-        {context['api']}
+                Available Components:
+                {context['components']}
 
-        Spec:
-        {json.dumps(self.spec.model_dump(), indent=2)}
-        
-        {core_prompt}
-        """
-        
+                Available Route Handlers:
+                {context['api']}
+
+                Spec:
+                {json.dumps(self.spec.model_dump(), indent=2)}
+
+                {core_prompt}
+                """
         return (await lumos.call_ai_async(
             messages=[
                 {"role": "system", "content": "You are a Next.js 14 App Router specialist focusing on proper page structure and data flow."},
