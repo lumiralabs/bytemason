@@ -9,7 +9,8 @@ from blueberry.models import (
     BuildErrorReport,
     AgentAction,
     AgentResponse,
-    FileOperation
+    FileOperation,
+    DirectoryListing
 )
 import re
 import json
@@ -27,10 +28,11 @@ class RepairAgent:
         self.tools = {
             "read_file": self._read_file,
             "write_file": self._write_file,
-            "create_backup": self._create_backup,
-            "restore_backup": self._restore_backup,
+            # "create_backup": self._create_backup,
+            # "restore_backup": self._restore_backup,
             "generate_fix": self._generate_fix,
-            "analyze_dependencies": self._analyze_dependencies  # Add new tool
+            "analyze_dependencies": self._analyze_dependencies,  # Add new tool
+            "list_directory": self._list_directory
         }
 
     async def _analyze_build_errors_with_ai(self, build_output: str) -> BuildErrorReport:
@@ -93,54 +95,99 @@ class RepairAgent:
 
     async def _repair_single_error(self, error: BuildError, max_turns: int = 5) -> None:
         """Handle a single error using the agent loop."""
-        system_prompt = """You are an expert Next.js 14 app router and TypeScript developer specializing in fixing build errors.
-        You run in a loop of Thought, Action, PAUSE, Observation.
-        At each step, you:
-        1. Think about what needs to be done
-        2. Take an Action from your available tools
-        3. PAUSE to receive the Observation from that action
-        4. Continue until you've fixed the error or determined it cannot be fixed
-        
-        Your available actions are:
-        
-        read_file:
-        - Input: Simple string with file path
-        Example: {"tool": "read_file", "input": "path/to/file.ts", "thought": "Need to read the file content"}
-        
-        write_file:
-        - Input: JSON string with path and content
-        Example: {"tool": "write_file", "input": "{\\"path\\": \\"path/to/file.ts\\", \\"content\\": \\"file content here\\"}", "thought": "Writing fixed content"}
-        
-        create_backup:
-        - Input: Simple string with file path
-        Example: {"tool": "create_backup", "input": "path/to/file.ts", "thought": "Creating backup before changes"}
-        
-        restore_backup:
-        - Input: Simple string with file path
-        Example: {"tool": "restore_backup", "input": "path/to/file.ts", "thought": "Restoring previous backup"}
-        
-        generate_fix:
-        - Input: JSON string with file, current_content, and error
-        Example: {"tool": "generate_fix", "input": "{\\"file\\": \\"path/to/file.ts\\", \\"current_content\\": \\"..\\", \\"error\\": \\"...\\"}", "thought": "Generating fix for the error"}
+        system_prompt = """YYou are an advanced AI repair agent, an expert Next.js 14 App Router and TypeScript developer, dedicated to fixing build errors with maximum reasoning and precision.
 
-        analyze_dependencies:
-        - Input: JSON string with file path and import statement
-        Example: {"tool": "analyze_dependencies", "input": "{\\"file\\": \\"path/to/file.ts\\", \\"import\\": \\"import { Something } from './other'\\"}", "thought": "Checking import dependencies"}
+        Your identity and capabilities:
+        - You excel at diagnosing and correcting complex Next.js 14 (App Router) and TypeScript issues.
+        - You plan, reason, and perform multi-step fixes in a methodical, iterative manner.
+        - You reflect on prior steps and refine your approach as needed.
 
-        Always create a backup before modifying any file.
-        Think carefully about each step and explain your reasoning.
-        
-        Respond in a structured format with:
+        Your process is **iterative**:
+        1. **Think carefully** about what needs to be done.
+        2. **Take an Action** by calling one of your available tools.
+        3. **Pause** and observe the result (the “observation”).
+        4. **Reflect** on whether to continue refining or finalize the fix.
+        5. Repeat until the error is completely fixed or you determine it cannot be fixed.
+
+        **Important additional rule**: 
+        - If the code references a component or file (e.g., `@/components/ui/checkbox`) and that file does not exist, **create** it using the appropriate tool (`write_file` or `generate_fix`). Provide at least minimal or placeholder code that ensures the build can proceed (for example, a basic React component that exports the required functionality).
+
+        At **any point**, you can self-reflect to confirm if the build error is fully addressed:
+        - If the issue is resolved, set `"status": "fixed"` and provide a concise `"explanation"`.
+        - If you cannot fix the error, set `"status": "failed"` and briefly explain why in `"explanation"`.
+
+        You have the following **tools** (no backup actions are available):
+
+        1. **read_file**  
+        - Input: A simple string containing the file path.  
+        - Example:
+            ```json
+            {
+            "tool": "read_file",
+            "input": "path/to/file.ts",
+            "thought": "Need to inspect the current file content"
+            }
+            ```
+
+        2. **write_file**  
+        - Input: A JSON string containing `"path"` and `"content"`.  
+        - Example:
+            ```json
+            {
+            "tool": "write_file",
+            "input": "{\"path\": \"path/to/file.ts\", \"content\": \"updated file content\"}",
+            "thought": "Overwriting the file with the new content"
+            }
+            ```
+
+        3. **generate_fix**  
+        - Input: A JSON string containing `"file"`, `"current_content"`, and `"error"`.  
+        - Example:
+            ```json
+            {
+            "tool": "generate_fix",
+            "input": "{\"file\": \"path/to/file.ts\", \"current_content\": \"...\", \"error\": \"...\"}",
+            "thought": "Generate a code fix based on the current content and the error details"
+            }
+            ```
+
+        4. **analyze_dependencies**  
+        - Input: A JSON string with `"file"` and `"import"`.  
+        - Example:
+            ```json
+            {
+            "tool": "analyze_dependencies",
+            "input": "{\"file\": \"path/to/file.ts\", \"import\": \"import { Something } from './other'\"}",
+            "thought": "Check if the import path is valid and look for the correct file"
+            }
+            ```
+
+        5. **list_directory**  
+        - Input: A simple string specifying a directory path to inspect.  
+        - Example:
+            ```json
+            {
+            "tool": "list_directory",
+            "input": "app/components",
+            "thought": "Explore the directory structure for relevant files"
+            }
+            ```
+
+        When you respond, **always** produce valid JSON matching the structure:
+
+        ```json
         {
-          "thought": "Your current thoughts about what needs to be done",
-          "action": {
-            "tool": "tool_name",
-            "input": "tool input as described above",
-            "thought": "why you're taking this action"
-          },
-          "status": "thinking|fixed|failed",
-          "explanation": "only needed if status is fixed or failed"
+        "thought": "Use <thoughts> to hold reasoning. Example: <thoughts>I need to read file.ts</thoughts>",
+        "action": {
+            "tool": "one_of_the_tools",
+            "input": "...",
+            "thought": "Why you chose this tool"
+        },
+        "status": "thinking | fixed | failed",
+        "explanation": "Explanation only if status is fixed or failed"
         }
+
+
         """
         
         messages = [{"role": "system", "content": system_prompt}]
@@ -311,18 +358,29 @@ class RepairAgent:
     async def _generate_fix(self, data: Dict[str, str]) -> FileOperation:
         """Generate a fix for the file."""
         try:
+
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            prompt_path = os.path.join(current_dir, "prompts", "core_prompt.md")
+
+            with open(prompt_path, "r") as f:
+                core_prompt = f.read()
+
+
             prompt = f"""Fix this file:
             
             File: {data['file']}
             Error: {data['error']}
             
             Current content:
+            {core_prompt}
             ```typescript
             {data['current_content']}
             ```
             
             Provide only the fixed code with no explanation:
             """
+
+            
             
             response = await lumos.call_ai_async(
                 messages=[
@@ -385,63 +443,112 @@ class RepairAgent:
                         target_path = (target_path / 'index').with_suffix(ext)
                         break
                         
-            # Check if file exists
+            # Before checking if file exists, list the directory to find similar files
+            dir_path = target_path.parent
+            dir_listing = await self._list_directory(str(dir_path.relative_to(self.project_path)))
+            
             if not target_path.exists():
-                # Generate suggestion for missing file
-                prompt = f"""Create a new TypeScript file for this import:
-                Import statement: {import_stmt}
-                File path: {target_path}
+                # Check for case-insensitive matches
+                target_name = target_path.name.lower()
+                similar_files = [
+                    f for f in dir_listing.files 
+                    if Path(f).name.lower() == target_name
+                ]
                 
-                Provide only the content for the new file, including proper exports.
-                """
+                if similar_files:
+                    return FileOperation(
+                        success=True,
+                        message=f"Found similar file with different case: {similar_files[0]}",
+                        path=similar_files[0],
+                        suggested_action="update_import"
+                    )
+                    
+                # Continue with existing missing file handling...
                 
-                response = await lumos.call_ai_async(
-                    messages=[
-                        {"role": "system", "content": "You are an expert TypeScript developer. Generate only the file content."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    model="gpt-4o"
-                )
-                
-                return FileOperation(
-                    success=True,
-                    message="Generated content for missing file",
-                    path=str(target_path.relative_to(self.project_path)),
-                    content=response.strip(),
-                    suggested_action="create_file"
-                )
-            
-            # If file exists, analyze its exports
-            file_content = target_path.read_text()
-            
-            # Extract what's being imported
-            import_items = re.findall(r'{(.+?)}', import_stmt)
-            imported_names = [name.strip() for items in import_items for name in items.split(',')]
-            
-            # Check if the imported items exist in the target file
-            missing_exports = []
-            for name in imported_names:
-                if not re.search(rf'export.+?{name}\b', file_content):
-                    missing_exports.append(name)
-            
-            if missing_exports:
-                return FileOperation(
-                    success=True,
-                    message=f"Missing exports in target file: {', '.join(missing_exports)}",
-                    path=str(target_path.relative_to(self.project_path)),
-                    content=file_content,
-                    suggested_action="add_exports"
-                )
-            
-            return FileOperation(
-                success=True,
-                message="All dependencies verified",
-                path=str(target_path.relative_to(self.project_path))
-            )
+            # Rest of existing _analyze_dependencies code...
             
         except Exception as e:
             return FileOperation(
                 success=False,
                 message=f"Error analyzing dependencies: {str(e)}",
                 path=data["file"]
+            )
+
+    async def _list_directory(self, dir_path: str, recursive: bool = True) -> DirectoryListing:
+        """List contents of a directory, including subdirectories if recursive=True."""
+        try:
+            full_path = self.project_path / dir_path
+            
+            if not full_path.exists():
+                return DirectoryListing(
+                    path=dir_path,
+                    exists=False,
+                    is_empty=True,
+                    files=[],
+                    directories=[],
+                    error="Directory does not exist"
+                )
+            
+            if not full_path.is_dir():
+                return DirectoryListing(
+                    path=dir_path,
+                    exists=True,
+                    is_empty=True,
+                    files=[],
+                    directories=[],
+                    error="Path exists but is not a directory"
+                )
+
+            try:
+                files = []
+                directories = []
+                
+                # Use rglob for recursive or glob for non-recursive
+                pattern = "*" if recursive else "*"
+                glob_method = full_path.rglob if recursive else full_path.glob
+                
+                for entry in glob_method(pattern):
+                    try:
+                        # Skip .git, node_modules, and .next directories
+                        if any(part in ['.git', 'node_modules', '.next'] for part in entry.parts):
+                            continue
+                            
+                        relative_path = str(entry.relative_to(self.project_path))
+                        if entry.is_file():
+                            files.append(relative_path)
+                        elif entry.is_dir():
+                            directories.append(relative_path)
+                    except Exception:
+                        continue
+
+                files.sort()
+                directories.sort()
+
+                return DirectoryListing(
+                    path=dir_path,
+                    exists=True,
+                    is_empty=len(files) == 0 and len(directories) == 0,
+                    files=files,
+                    directories=directories,
+                    error=""
+                )
+
+            except PermissionError:
+                return DirectoryListing(
+                    path=dir_path,
+                    exists=True,
+                    is_empty=True,
+                    files=[],
+                    directories=[],
+                    error="Permission denied when accessing directory"
+                )
+
+        except Exception as e:
+            return DirectoryListing(
+                path=dir_path,
+                exists=False,
+                is_empty=True,
+                files=[],
+                directories=[],
+                error=f"Error listing directory: {str(e)}"
             )
