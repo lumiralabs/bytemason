@@ -312,16 +312,9 @@ async def generate_app(prompt: str, quiet: bool = False):
         except Exception as e:
             raise Exception(f"Failed to analyze requirements: {str(e)}")
 
-    if not quiet:
-        console.print("\n" + format_message("info", "Planned features:"))
-        display_features(intent.features)
-
-    # Verify features
-    if not quiet and typer.confirm("\nModify features?", default=False):
-        try:
-            intent = builder.verify_with_user_loop(intent)
-        except Exception as e:
-            raise Exception(f"Failed to modify features: {str(e)}")
+    # if not quiet:
+    #     console.print("\n" + format_message("info", "Planned features:"))
+    #     display_features(intent.features)
 
     # Generate specification
     with create_progress() as progress:
@@ -333,11 +326,6 @@ async def generate_app(prompt: str, quiet: bool = False):
             raise Exception(f"Failed to generate specification: {str(e)}")
 
     console.print("\n" + format_message("success", "Specification ready!"))
-
-    # Confirm project creation
-    if not quiet and not typer.confirm("\nCreate project?", default=True):
-        console.print(format_message("info", "Operation cancelled"))
-        return
 
     try:
         project_name = spec.name.lower().replace(" ", "-")
@@ -595,13 +583,9 @@ def plan(
             progress.update(task, completed=True)
 
         # Display features
-        if not quiet:
-            console.print("\n" + format_message("info", "Planned features:"))
-            display_features(intent.features)
-
-        # Verify features
-        if not quiet and typer.confirm("\nModify features?", default=False):
-            intent = builder.verify_with_user_loop(intent)
+        # if not quiet:
+        #     console.print("\n" + format_message("info", "Planned features:"))
+        #     display_features(intent.features)
 
         # Generate specification
         with create_progress() as progress:

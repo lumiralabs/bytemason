@@ -4,9 +4,15 @@ from enum import Enum
 
 
 class Intent(BaseModel):
-    features: list[str] = Field(
-        ..., description="Core features extracted from user's request"
-    )
+    app_name: str = Field(..., description="Concise name for the application")
+    primary_purpose: str = Field(..., description="Single-sentence description of the app's core purpose")
+    user_types: list[str] = Field(..., description="Different user roles in the system")
+    core_features: list[dict] = Field(..., description="Essential features with priority and complexity")
+    data_entities: list[dict] = Field(..., description="Key data models with their critical attributes")
+    auth_requirements: dict = Field(..., description="Authentication and authorization needs")
+    integration_requirements: list[str] = Field(..., description="External systems that must be integrated")
+    constraints: list[str] = Field(..., description="Technical or business limitations to consider")
+
 
 
 class SupabaseTable(BaseModel):

@@ -34,23 +34,48 @@ class ProjectBuilder:
         """Understand the user's intent from the user's input."""
         try:
             intent = lumos.call_ai(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """Yor are a senior product planner who creates a detailed requirement analysis and creates a list of important features, you don't do in fancy less useful features you just focus on core features. 
-                        Analyze user requests for typescript, Next.js 14 app router + Supabase applications and extract core features.
-                        Focus on:
-                        1. Core functionality and key features
-                        2. Required auth/security features
-                        3. Essential data models
-                        4. Critical API endpoints
-                        5. Keep it simple and practical, dont add any fancy features.
-                        """,
-                    },
-                    {"role": "user", "content": user_input},
-                ],
+    messages=[
+        {
+            "role": "system",
+            "content": """You are a senior product analyst specializing in web application requirements extraction. Your expertise is in distilling user requests into structured, actionable feature sets that development teams can implement without ambiguity.
+
+            ## YOUR OBJECTIVE
+            Transform the user's freeform request into a precise feature set for a Next.js 14 + Supabase application. You must:
+
+            1. Extract only explicitly mentioned or logically necessary features
+            2. Never invent or suggest additional features not implied by the request
+            3. Identify the minimum viable data model required
+            4. Determine authentication boundaries and user types
+            5. Recognize technical constraints and limitations
+
+            ## EXTRACTION METHODOLOGY
+            When analyzing the user input:
+
+            1. **Core Purpose Analysis**: Identify the fundamental problem the application solves
+            2. **User Type Identification**: Determine distinct user roles who will interact with the system
+            3. **Feature Extraction**: List only features that are:
+            - Explicitly mentioned in the request
+            - Logically required for the application to function as described
+            - Assign each a priority (Critical/High/Medium) and complexity (Simple/Moderate/Complex)
+            4. **Data Model Extraction**: Identify entities that must be stored, with only their essential attributes
+            5. **Auth Requirement Analysis**: Determine authentication needs and permission boundaries
+            6. **Integration Identification**: Note any external systems the application must connect with
+            7. **Constraint Recognition**: Identify limitations that will impact implementation
+
+            ## RESPONSE QUALITY CRITERIA
+            - Every feature must be traceable to the user's request or be logically necessary
+            - Features must be specific and actionable (e.g., "User authentication with email and password" NOT "User system")
+            - Each feature must be discrete and focused on a single capability
+            - Avoid marketing language or subjective quality descriptions
+            - Never include "nice-to-have" or aspirational features
+
+            Remember: Your output will directly shape the technical specification. Only include what is necessary and clearly implied.
+            """,
+        },
+            {"role": "user", "content": user_input},
+        ],
                 response_format=Intent,
-                model="gpt-4o",
+                model="anthropic/claude-3-5-sonnet-20241022",
             )
 
             return intent
@@ -58,135 +83,135 @@ class ProjectBuilder:
         except Exception as e:
             raise ValueError(f"Failed to understand intent: {str(e)}")
 
-    def validate_feature(self, feature: str) -> str:
-        """Validate and enhance a single feature.
+    # def validate_feature(self, feature: str) -> str:
+    #     """Validate and enhance a single feature.
 
-        Args:
-            feature: The feature to validate and enhance
+    #     Args:
+    #         feature: The feature to validate and enhance
 
-        Returns:
-            str: The validated/enhanced feature description
-        """
-        system_prompt = """You are an expert in writing clear, specific feature descriptions for web applications.
-        Given a feature description, enhance it to be more specific and actionable.
+    #     Returns:
+    #         str: The validated/enhanced feature description
+    #     """
+    #     system_prompt = """You are an expert in writing clear, specific feature descriptions for web applications.
+    #     Given a feature description, enhance it to be more specific and actionable.
 
-        Guidelines:
-        - Make it clear and specific
-        - Include key functionality aspects
-        - Consider security and UX implications
-        - Keep it concise but complete
+    #     Guidelines:
+    #     - Make it clear and specific
+    #     - Include key functionality aspects
+    #     - Consider security and UX implications
+    #     - Keep it concise but complete
 
-        Example Input: "User authentication"
-        Example Output: "Email and social authentication with JWT tokens and password reset"
-        """
+    #     Example Input: "User authentication"
+    #     Example Output: "Email and social authentication with JWT tokens and password reset"
+    #     """
 
-        _intent = lumos.call_ai(
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {"role": "user", "content": f"Enhance this feature: {feature}"},
-            ],
-            response_format=Intent,
-            model="gpt-4o",
-        )
+    #     _intent = lumos.call_ai(
+    #         messages=[
+    #             {
+    #                 "role": "system",
+    #                 "content": system_prompt,
+    #             },
+    #             {"role": "user", "content": f"Enhance this feature: {feature}"},
+    #         ],
+    #         response_format=Intent,
+    #         model="gpt-4o",
+    #     )
 
-        return feature
+    #     return feature
 
-    def verify_with_user_loop(self, intent: Intent, max_attempts=3) -> Intent:
-        """Verify the intent with the user, iterate with feedback and returns the final intent.
+    # def verify_with_user_loop(self, intent: Intent, max_attempts=3) -> Intent:
+    #     """Verify the intent with the user, iterate with feedback and returns the final intent.
 
-        Args:
-            intent: The initial intent to verify
-            max_attempts: Maximum number of modification attempts
+    #     Args:
+    #         intent: The initial intent to verify
+    #         max_attempts: Maximum number of modification attempts
 
-        Returns:
-            Intent: The verified and potentially modified intent
-        """
+    #     Returns:
+    #         Intent: The verified and potentially modified intent
+    #     """
 
-        console = Console()
+    #     console = Console()
 
-        attempts = 0
-        while attempts < max_attempts:
-            # Display current features
-            console.print("\n[bold yellow]Current features:[/bold yellow]")
-            for i, feature in enumerate(intent.features, 1):
-                console.print(f"{i}. {feature}")
+    #     attempts = 0
+    #     while attempts < max_attempts:
+    #         # Display current features
+    #         console.print("\n[bold yellow]Current features:[/bold yellow]")
+    #         for i, feature in enumerate(intent.features, 1):
+    #             console.print(f"{i}. {feature}")
 
-            if not typer.confirm(
-                "\nWould you like to modify these features?",
-                default=False,
-                show_default=True,
-            ):
-                break
+    #         if not typer.confirm(
+    #             "\nWould you like to modify these features?",
+    #             default=False,
+    #             show_default=True,
+    #         ):
+    #             break
 
-            # Show modification options
-            console.print("\n[bold]Options:[/bold]")
-            console.print("1. Add a feature")
-            console.print("2. Remove a feature")
-            console.print("3. Done modifying")
+    #         # Show modification options
+    #         console.print("\n[bold]Options:[/bold]")
+    #         console.print("1. Add a feature")
+    #         console.print("2. Remove a feature")
+    #         console.print("3. Done modifying")
 
-            choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3"])
+    #         choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3"])
 
-            if choice == "1":
-                new_feature = Prompt.ask("Enter new feature")
+    #         if choice == "1":
+    #             new_feature = Prompt.ask("Enter new feature")
 
-                # Validate and enhance the feature with AI
-                if typer.confirm(
-                    "Would you like AI to validate and enhance this feature?",
-                    default=True,
-                    show_default=True,
-                ):
-                    status = console.status("[bold green]Validating feature...")
-                    status.start()
-                    try:
-                        enhanced_feature = self.validate_feature(new_feature)
-                        if enhanced_feature != new_feature:
-                            status.stop()
-                            if typer.confirm(
-                                f"Would you like to use the enhanced version: {enhanced_feature}?",
-                                default=True,
-                                show_default=True,
-                            ):
-                                new_feature = enhanced_feature
-                        else:
-                            status.stop()
-                    except Exception as e:
-                        status.stop()
-                        console.print(f"[red]Error validating feature: {e}[/red]")
+    #             # Validate and enhance the feature with AI
+    #             if typer.confirm(
+    #                 "Would you like AI to validate and enhance this feature?",
+    #                 default=True,
+    #                 show_default=True,
+    #             ):
+    #                 status = console.status("[bold green]Validating feature...")
+    #                 status.start()
+    #                 try:
+    #                     enhanced_feature = self.validate_feature(new_feature)
+    #                     if enhanced_feature != new_feature:
+    #                         status.stop()
+    #                         if typer.confirm(
+    #                             f"Would you like to use the enhanced version: {enhanced_feature}?",
+    #                             default=True,
+    #                             show_default=True,
+    #                         ):
+    #                             new_feature = enhanced_feature
+    #                     else:
+    #                         status.stop()
+    #                 except Exception as e:
+    #                     status.stop()
+    #                     console.print(f"[red]Error validating feature: {e}[/red]")
 
-                intent.features.append(new_feature)
+    #             intent.features.append(new_feature)
 
-            elif choice == "2":
-                if not intent.features:
-                    console.print("[yellow]No features to remove[/yellow]")
-                    continue
+    #         elif choice == "2":
+    #             if not intent.features:
+    #                 console.print("[yellow]No features to remove[/yellow]")
+    #                 continue
 
-                remove_idx = (
-                    int(
-                        Prompt.ask(
-                            "Enter number of feature to remove",
-                            choices=[
-                                str(i) for i in range(1, len(intent.features) + 1)
-                            ],
-                        )
-                    )
-                    - 1
-                )
-                intent.features.pop(remove_idx)
+    #             remove_idx = (
+    #                 int(
+    #                     Prompt.ask(
+    #                         "Enter number of feature to remove",
+    #                         choices=[
+    #                             str(i) for i in range(1, len(intent.features) + 1)
+    #                         ],
+    #                     )
+    #                 )
+    #                 - 1
+    #             )
+    #             intent.features.pop(remove_idx)
 
-            else:  # choice == "3"
-                break
+    #         else:  # choice == "3"
+    #             break
 
-            attempts += 1
+    #         attempts += 1
 
-            # Show updated features
-            console.print("\n[bold yellow]Updated features:[/bold yellow]")
-            for i, feature in enumerate(intent.features, 1):
-                console.print(f"{i}. {feature}")
+    #         # Show updated features
+    #         console.print("\n[bold yellow]Updated features:[/bold yellow]")
+    #         for i, feature in enumerate(intent.features, 1):
+    #             console.print(f"{i}. {feature}")
 
-        return intent
+    #     return intent
 
     def create_spec(self, intent: Intent) -> ProjectSpec:
         """Create a detailed project specification based on the intent and save it to a file."""
@@ -198,37 +223,83 @@ class ProjectBuilder:
                 core_prompt = f.read()
 
             spec = lumos.call_ai(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f""" You are a senior NextJS 14 + Supabase developer, you know the complexities of developing different parts and features of an app, you don't just start writing, 
-                        you do a risk and feasibility analysis first and then come up with a detailed specification of the whole app, you know that every single word you write will impact how the junior devs will think so you try to be as precise and descriptive as possible.
-                        Generate a detailed specification for a Next.js 14 App router + Supabase application.
+    messages=[
+        {
+            "role": "system",
+            "content": f"""You are a principal architect with 10+ years of experience specializing in NextJS 14 + Supabase production applications. Your specifications serve as the foundation for entire development teams and must balance technical precision with actionable clarity.
 
-                        You currently have a boilerplate with all the basic setup done, you just need to add the features requested by the user.
-                        {core_prompt}
+            ## ANALYSIS PHASE
+            Begin with a structured risk and feasibility assessment:
+            1. **Technical constraints** - Evaluate potential performance bottlenecks, scalability concerns, and dependency risks
+            2. **Data complexity** - Assess relationships, migration challenges, and edge cases
+            3. **Security considerations** - Identify authentication/authorization boundaries and data exposure risks
+            4. **Implementation complexity** - Rate each feature's difficulty (Low/Medium/High) with justification
 
-                        Include:
-                        1. components with clear purposes
-                        2. API routes for all the operations needed
-                        3. Postgres database tables with columns and relationships
-                        4. Pages with:
-                           - Full paths (e.g. /dashboard, /profile)
-                           - Associated API routes needed
-                           - Required components
-                           - Auth requirements
-                           
-                        
-                        Keep the specification simple and practical. Dont add any fancy features. """,
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Generate specification for: {json.dumps(intent.model_dump(), indent=2)}",
-                    },
-                ],
-                response_format=ProjectSpec,
-                model="gpt-4o",
-            )
+            ## SPECIFICATION STRUCTURE
+            For each feature, provide a specification that includes:
+
+            ### Architecture
+            - **Data Flow Diagram** - Show how data moves through the system for this feature
+            - **Component Hierarchy** - Outline parent-child relationships with props interfaces
+            - **State Management** - Identify global vs. local state needs with recommended patterns
+
+            ### Database Design
+            - **Table schemas** with:
+            - Column names with data types and constraints
+            - Foreign key relationships and cascade behaviors
+            - Indexes and performance considerations
+            - RLS (Row Level Security) policies for Supabase
+            - Triggers and functions when necessary
+
+            ### API Layer
+            - **Route specifications** for each endpoint:
+            - Full path with method (e.g., POST /api/projects/:id/collaborators)
+            - Request body schema with validation rules
+            - Response schema with status codes
+            - Error handling strategy
+            - Rate limiting considerations
+            - Authentication/authorization requirements
+
+            ### UI Components
+            - **Component breakdown** with:
+            - Purpose and responsibility
+            - Props interface with TypeScript types
+            - State management approach
+            - Key user interactions and event handlers
+            - Accessibility considerations
+            - Reusability potential across the application
+
+            ### Pages
+            - **Page routes** with:
+            - Dynamic segments and query parameters
+            - Data fetching strategy (SSR/SSG/ISR/CSR)
+            - SEO considerations
+            - Loading/error states
+            - Layout components and nested routes
+
+            ### Testing Strategy
+            - **Unit test coverage** requirements
+            - **Integration test** scenarios
+            - **E2E test** critical paths
+            - **Performance testing** metrics to monitor
+
+            ### Progressive Enhancement
+            - Outline how features can be implemented incrementally
+            - Provide fallback strategies for complex features
+
+            Use the existing project structure and best practices from {core_prompt} as foundation.
+
+            Your specification must be optimized for implementation by balancing comprehensiveness with clarity. Focus on technical precision while maintaining readability for junior developers. Avoid theoretical patterns - every element must be implementable in Next.js 14 and Supabase.
+            """,
+        },
+        {
+            "role": "user",
+            "content": f"Generate specification for: {json.dumps(intent.model_dump(), indent=2)}",
+        },
+    ],
+    response_format=ProjectSpec,
+    model="anthropic/claude-3-5-sonnet-20241022",
+)
 
             return spec
 
