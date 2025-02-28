@@ -7,9 +7,9 @@ class Intent(BaseModel):
     app_name: str = Field(..., description="Concise name for the application")
     primary_purpose: str = Field(..., description="Single-sentence description of the app's core purpose")
     user_types: list[str] = Field(..., description="Different user roles in the system")
-    core_features: list[dict] = Field(..., description="Essential features with priority and complexity")
-    data_entities: list[dict] = Field(..., description="Key data models with their critical attributes")
-    auth_requirements: dict = Field(..., description="Authentication and authorization needs")
+    core_features: list[str] = Field(..., description="Essential features with priority and complexity")
+    data_entities: list[str] = Field(..., description="Key data models with their critical attributes")
+    auth_requirements: List[str] = Field(..., description="Authentication and authorization needs")
     integration_requirements: list[str] = Field(..., description="External systems that must be integrated")
     constraints: list[str] = Field(..., description="Technical or business limitations to consider")
 
@@ -84,11 +84,11 @@ class GeneratedCode(BaseModel):
 
 class BuildError(BaseModel):
     file: str = Field(..., description="File path where error occurred")
-    line: int = Field(None, description="Line number of error")
-    column: int = Field(None, description="Column number of error")
+    line: int = Field(..., description="Line number of error")
+    column: int = Field(..., description="Column number of error")
     message: str = Field(..., description="Error message")
     type: str = Field(..., description="Error type (e.g., 'TypeError', 'SyntaxError')")
-    code: str = Field(None, description="Error code if available")
+    code: str = Field(..., description="Error code if available")
 
 
 class BuildErrorReport(BaseModel):
@@ -112,17 +112,17 @@ class AgentAction(BaseModel):
 class AgentResponse(BaseModel):
     """Response from the repair agent's AI"""
     thought: str = Field(..., description="Current thinking about the problem")
-    action: Optional[AgentAction] = Field(None, description="Next action to take, if any")
+    action: Optional[AgentAction] = Field(..., description="Next action to take, if any")
     status: str = Field(..., description="Current status: 'thinking', 'fixed', 'failed'")
-    explanation: Optional[str] = Field(None, description="Explanation of the status if fixed/failed")
+    explanation: Optional[str] = Field(..., description="Explanation of the status if fixed/failed")
 
 
 class FileOperation(BaseModel):
     """Result of a file operation"""
     success: bool = Field(..., description="Whether the operation succeeded")
     message: str = Field(..., description="Description of what happened")
-    path: Optional[str] = Field(None, description="Path to the file that was operated on")
-    content: Optional[str] = Field(None, description="File content if relevant")
+    path: Optional[str] = Field(..., description="Path to the file that was operated on")
+    content: Optional[str] = Field(..., description="File content if relevant")
 
 
 class DirectoryListing(BaseModel):

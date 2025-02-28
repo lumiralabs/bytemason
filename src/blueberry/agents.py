@@ -75,7 +75,7 @@ class ProjectBuilder:
             {"role": "user", "content": user_input},
         ],
                 response_format=Intent,
-                model="anthropic/claude-3-5-sonnet-20241022",
+                model="gpt-4o",
             )
 
             return intent
@@ -298,7 +298,7 @@ class ProjectBuilder:
         },
     ],
     response_format=ProjectSpec,
-    model="anthropic/claude-3-5-sonnet-20241022",
+    model="gpt-4o",
 )
 
             return spec
@@ -520,7 +520,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="anthropic/claude-3-5-sonnet-20241022"
+            model="gpt-4o"
         )).files
 
 
@@ -583,7 +583,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="anthropic/claude-3-5-sonnet-20241022"
+            model="gpt-4o"
         )).files
 
     async def _generate_pages(
@@ -648,7 +648,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="anthropic/claude-3-5-sonnet-20241022"
+            model="gpt-4o"
         )).files
 
     async def _apply_single_change(self, file: FileContent):
@@ -751,7 +751,7 @@ class CodeAgent:
                     {"role": "system", "content": "You are an expert at analyzing Next.js and TypeScript build errors."},
                     {"role": "user", "content": prompt}
                 ],
-                model="anthropic/claude-3-5-sonnet-20241022",
+                model="gpt-4o",
                 response_format=BuildErrorReport
             )
 
@@ -865,7 +865,7 @@ class SupabaseSetupAgent:
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}",
                     },
                 ],
-                model="anthropic/claude-3-5-sonnet-20241022",
+                model="gpt-4o",
             )
             return migrations
         except Exception as e:
