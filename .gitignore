@@ -8,6 +8,7 @@ _dev/
 *.egg-info
 __pycache__/
 site/
+demo/
 
 
 ## Frontend

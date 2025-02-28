@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 import re
 from rich.progress import Progress
-from typing import List, Dict
+from typing import List, Dict, Set
 import shutil
 from rich.progress import SpinnerColumn, TextColumn
 import asyncio
@@ -75,7 +75,7 @@ class ProjectBuilder:
             {"role": "user", "content": user_input},
         ],
                 response_format=Intent,
-                model="gpt-4o",
+                model="anthropic/claude-3-5-sonnet-20241022",
             )
 
             return intent
@@ -114,7 +114,7 @@ class ProjectBuilder:
     #             {"role": "user", "content": f"Enhance this feature: {feature}"},
     #         ],
     #         response_format=Intent,
-    #         model="gpt-4o",
+    #         model="anthropic/claude-3-5-sonnet-20241022",
     #     )
 
     #     return feature
@@ -298,7 +298,7 @@ class ProjectBuilder:
         },
     ],
     response_format=ProjectSpec,
-    model="gpt-4o",
+    model="anthropic/claude-3-5-sonnet-20241022",
 )
 
             return spec
@@ -420,8 +420,13 @@ class CodeAgent:
                 for file in generated.files:
                     await self._apply_single_change(file)
                     progress.advance(task)
+                
+                # 3. Identify and add shadcn components
+                task = progress.add_task("[cyan]Installing shadcn components...", total=None)
+                await self._identify_and_add_shadcn_components(generated.files)
+                progress.update(task, completed=True)
 
-                # 3. Run build and fix errors
+                # 4. Run build and fix errors
                 task = progress.add_task("[cyan]Running build check...", total=None)
                 if errors := await self._run_build():
                     self.console.print(
@@ -435,6 +440,60 @@ class CodeAgent:
             except Exception as e:
                 self.console.print(f"[red]Error in code generation: {str(e)}[/red]")
                 return False
+
+    async def _identify_and_add_shadcn_components(self, files: List[FileContent]) -> None:
+        """
+        Identify shadcn components used in the generated code and add them using the shadcn CLI.
+        """
+        component_pattern = r'from\s+[\'"]@/components/ui/([a-z0-9-]+)[\'"]'
+        components: Set[str] = set()
+        
+        # 1. Scan all files for shadcn component imports
+        for file in files:
+            if file.path.endswith(('.ts', '.tsx', '.js', '.jsx')):
+                matches = re.findall(component_pattern, file.content)
+                components.update(matches)
+        
+        if not components:
+            self.console.print("[dim]No shadcn components found to install[/dim]")
+            return
+            
+        self.console.print(f"[cyan]Found {len(components)} shadcn components to install:[/cyan]")
+        for comp in sorted(components):
+            self.console.print(f"[dim]- {comp}[/dim]")
+        
+        # 2. Install each component
+        for component in sorted(components):
+            try:
+                self.console.print(f"[cyan]Installing shadcn component: {component}[/cyan]")
+                
+                # Fixed command: use shadcn@latest instead of shadcn-ui@latest and -y instead of --yes
+                process = await asyncio.create_subprocess_exec(
+                    "npx", 
+                    "shadcn@latest",
+                    "add",
+                    component,
+                    "-y",  # Use -y instead of --yes for the flag
+                    cwd=str(self.project_path),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+                
+                # Log the full output for debugging
+                stdout_text = stdout.decode().strip() if stdout else ""
+                stderr_text = stderr.decode().strip() if stderr else ""
+
+                self.console.print(f"[dim]shadcn output: {stdout_text}[/dim]")
+                self.console.print(f"[dim]shadcn error: {stderr_text}[/dim]")
+                
+                if process.returncode == 0:
+                    self.console.print(f"[green]Successfully installed {component}[/green]")
+                else:
+                    self.console.print(f"[yellow]Error installing {component}[/yellow]")
+                    
+            except Exception as e:
+                self.console.print(f"[yellow]Error installing {component}: {str(e)}[/yellow]")
 
     async def _generate_structured_code(self) -> GeneratedCode:
         """Generate code with maximum context flow: API -> Components -> Pages"""
@@ -520,7 +579,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o"
+            model="anthropic/claude-3-5-sonnet-20241022"
         )).files
 
 
@@ -583,7 +642,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o"
+            model="anthropic/claude-3-5-sonnet-20241022"
         )).files
 
     async def _generate_pages(
@@ -648,7 +707,7 @@ class CodeAgent:
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
-            model="gpt-4o"
+            model="anthropic/claude-3-5-sonnet-20241022"
         )).files
 
     async def _apply_single_change(self, file: FileContent):
@@ -720,12 +779,18 @@ class CodeAgent:
                 try:
                     errors = await self._analyze_build_errors_with_ai(full_output)
                     if errors:
-                        self.console.print(f"[yellow]Build failed with {len(errors.errors)} errors[/yellow]")
+                        self.console.print(
+                            f"[yellow]Build failed with {len(errors.errors)} errors[/yellow]"
+                        )
                         for error in errors.errors:
-                            self.console.print(f"[red]Error in {error.file}: {error.message}[/red]")
+                            self.console.print(
+                                f"[red]Error in {error.file}: {error.message}[/red]"
+                            )
                         return errors.errors
                 except Exception as e:
-                    self.console.print(f"[yellow]AI error analysis failed, falling back to basic parsing: {str(e)}[/yellow]")
+                    self.console.print(
+                        f"[yellow]AI error analysis failed, falling back to basic parsing: {str(e)}[/yellow]"
+                    )
                 return errors
 
         except Exception as e:
@@ -748,15 +813,17 @@ class CodeAgent:
 
             response = await lumos.call_ai_async(
                 messages=[
-                    {"role": "system", "content": "You are an expert at analyzing Next.js and TypeScript build errors."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "You are an expert at analyzing Next.js and TypeScript build errors.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
-                model="gpt-4o",
-                response_format=BuildErrorReport
+                model="anthropic/claude-3-5-sonnet-20241022",
+                response_format=BuildErrorReport,
             )
 
-            print(response);
-
+            print(response)
 
             return response
 
@@ -865,7 +932,7 @@ class SupabaseSetupAgent:
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}",
                     },
                 ],
-                model="gpt-4o",
+                model="anthropic/claude-3-5-sonnet-20241022",
             )
             return migrations
         except Exception as e:
