@@ -865,7 +865,7 @@ class SupabaseSetupAgent:
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}",
                     },
                 ],
-                model="gpt-4o",
+                model="anthropic/claude-3-5-sonnet-20241022",
             )
             return migrations
         except Exception as e:

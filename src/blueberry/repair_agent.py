@@ -54,7 +54,7 @@ class RepairAgent:
                     {"role": "system", "content": "You are an expert at analyzing Next.js 14 app router and TypeScript build errors."},
                     {"role": "user", "content": prompt}
                 ],
-                model="gpt-4o",
+                model="anthropic/claude-3-5-sonnet-20241022",
                 response_format=BuildErrorReport
             )
 
@@ -213,7 +213,7 @@ class RepairAgent:
             messages.append({"role": "user", "content": next_prompt})
             response = await lumos.call_ai_async(
                 messages=messages,
-                model="gpt-4o",
+                model="anthropic/claude-3-5-sonnet-20241022",
                 response_format=AgentResponse
             )
             self.console.print(f"\n[dim]{response.model_dump_json(indent=2)}[/dim]")
@@ -387,7 +387,7 @@ class RepairAgent:
                     {"role": "system", "content": "You are a senior expert Next.js 14 app router and TypeScript developer who first identifies the root cause of the error and then plans out a fix and then implement it with all the edge cases in mind. Provide only the fixed code with no explanation."},
                     {"role": "user", "content": prompt}
                 ],
-                model="gpt-4o"
+                model="anthropic/claude-3-5-sonnet-20241022"
             )
             
             # Clean up the response
