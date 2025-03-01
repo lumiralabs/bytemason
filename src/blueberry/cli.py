@@ -635,6 +635,10 @@ app.add_typer(db)
 
 @db.command()
 def setup(
+    spec_file: str = typer.Argument(
+        None,
+        help="Path to specification file (optional)",
+    ),
     url: str = typer.Option(
         None,
         "--url",
@@ -657,6 +661,12 @@ def setup(
         prompt="Service role key",
         hide_input=True,
     ),
+    output: str = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output file name for schema (default: timestamp_schema.sql)",
+    ),
     quiet: bool = typer.Option(
         False,
         "--quiet",
@@ -665,23 +675,20 @@ def setup(
     ),
 ):
     """
-    Configure database connection and authentication.
+    Configure database connection and generate schema.
 
-    Sets up your project with Supabase credentials and initializes:
-    • Database connection
-    • Authentication
-    • API access
-    • Local development
+    Sets up your project with Supabase credentials and optionally 
+    generates database schema from specification.
 
     The setup process will:
-    1. Install required dependencies
-    2. Configure environment variables
-    3. Initialize local development
-    4. Link to your Supabase project
+    1. Configure environment variables for Supabase
+    2. Initialize local development
+    3. Link to your Supabase project
+    4. Generate database schema (if spec file provided)
 
     Examples:
-        $ berry db setup
-        $ berry db setup --url https://xxx.supabase.co --anon-key xxx
+        $ berry db setup                          # Basic setup
+        $ berry db setup specs/myapp_spec.json    # Setup + schema generation
     """
     try:
         # Extract project ref from URL
@@ -698,7 +705,14 @@ def setup(
             )
 
         # Create agent and setup environment
-        agent = SupabaseSetupAgent(None, os.getcwd())
+        spec = None
+        if spec_file:
+            # Load and validate spec if provided
+            with open(spec_file) as f:
+                spec_data = json.load(f)
+            spec = ProjectSpec(**spec_data)
+            
+        agent = SupabaseSetupAgent(spec, os.getcwd())
         
         # Set up environment variables
         if not quiet:
@@ -709,13 +723,43 @@ def setup(
         if not quiet:
             console.print(format_message("info", "Initializing database..."))
         agent.initialize_project(project_ref)
-
-        console.print("\n" + format_message("success", "Database setup complete!"))
         
-        if not quiet:
-            console.print("\n" + format_message("info", "Next steps:"))
-            console.print("  1. berry db generate  # Generate database schema")
-            console.print("  2. berry db push     # Apply schema to database")
+        console.print(format_message("success", "Database setup complete!"))
+        
+        # Generate schema if spec is provided
+        if spec:
+            if not quiet:
+                console.print("\n" + format_message("info", "Generating schema..."))
+            
+            migration_sql = agent.get_migration_sql()
+            
+            # Create migrations directory
+            migrations_dir = Path("supabase/migrations")
+            migrations_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate filename
+            if not output:
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                output = f"{timestamp}_schema.sql"
+            
+            migration_file = migrations_dir / output
+            
+            with open(migration_file, "w") as f:
+                f.write(migration_sql)
+            
+            console.print(
+                format_message("success", f"Generated schema: {migration_file}")
+            )
+            
+            if not quiet:
+                console.print("\n" + format_message("info", "Next step:"))
+                console.print("  berry db push  # Apply schema to database")
+        else:
+            if not quiet:
+                console.print("\n" + format_message("info", "Next steps:"))
+                console.print("  1. berry plan \"Your app description\"  # Plan your app")
+                console.print("  2. berry db setup specs/yourapp_spec.json  # Generate schema")
+                console.print("  3. berry db push  # Apply schema to database")
 
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Setup failed: {str(e)}"))
@@ -725,82 +769,83 @@ def setup(
         raise typer.Exit(1)
 
 
-@db.command()
-def generate(
-    spec_file: str = typer.Argument(
-        ...,
-        help="Path to specification file",
-    ),
-    output: str = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output file name (default: timestamp_schema.sql)",
-    ),
-    quiet: bool = typer.Option(
-        False,
-        "--quiet",
-        "-q",
-        help="Minimize output",
-    ),
-):
-    """
-    Generate database schema from specification.
+# @db.command()
+# def generate(
+#     spec_file: str = typer.Argument(
+#         ...,
+#         help="Path to specification file",
+#     ),
+#     output: str = typer.Option(
+#         None,
+#         "--output",
+#         "-o",
+#         help="Output file name (default: timestamp_schema.sql)",
+#     ),
+#     quiet: bool = typer.Option(
+#         False,
+#         "--quiet",
+#         "-q",
+#         help="Minimize output",
+#     ),
+# ):
+#     """
+#     Generate database schema from specification.
 
-    Creates SQL migration files that define:
-    • Database tables
-    • Relationships
-    • Indexes
-    • Security policies
+#     Creates SQL migration files that define:
+#     • Database tables
+#     • Relationships
+#     • Indexes
+#     • Security policies
 
-    The generated schema will be saved in:
-    supabase/migrations/
+#     The generated schema will be saved in:
+#     supabase/migrations/
 
-    Examples:
-        $ berry db generate specs/myapp_spec.json
-        $ berry db generate specs/myapp_spec.json -o initial.sql
-    """
-    try:
-        # Load and validate spec
-        with open(spec_file) as f:
-            spec_data = json.load(f)
-        spec = ProjectSpec(**spec_data)
+#     Examples:
+#         $ berry db generate specs/myapp_spec.json
+#         $ berry db generate specs/myapp_spec.json -o initial.sql
+#     """
+#     console.print(format_message("warning", "This command is deprecated. Use 'berry db setup' instead."))
+#     try:
+#         # Load and validate spec
+#         with open(spec_file) as f:
+#             spec_data = json.load(f)
+#         spec = ProjectSpec(**spec_data)
 
-        # Create agent
-        agent = SupabaseSetupAgent(spec, os.getcwd())
+#         # Create agent
+#         agent = SupabaseSetupAgent(spec, os.getcwd())
         
-        if not quiet:
-            console.print(format_message("info", "Generating schema..."))
+#         if not quiet:
+#             console.print(format_message("info", "Generating schema..."))
         
-        migration_sql = agent.get_migration_sql()
+#         migration_sql = agent.get_migration_sql()
         
-        # Create migrations directory
-        migrations_dir = Path("supabase/migrations")
-        migrations_dir.mkdir(parents=True, exist_ok=True)
+#         # Create migrations directory
+#         migrations_dir = Path("supabase/migrations")
+#         migrations_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename
-        if not output:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            output = f"{timestamp}_schema.sql"
+#         # Generate filename
+#         if not output:
+#             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+#             output = f"{timestamp}_schema.sql"
         
-        migration_file = migrations_dir / output
+#         migration_file = migrations_dir / output
         
-        with open(migration_file, "w") as f:
-            f.write(migration_sql)
+#         with open(migration_file, "w") as f:
+#             f.write(migration_sql)
         
-        console.print(
-            format_message("success", f"Generated schema: {migration_file}")
-        )
+#         console.print(
+#             format_message("success", f"Generated schema: {migration_file}")
+#         )
 
-        if not quiet:
-            console.print("\n" + format_message("info", "Next step:"))
-            console.print("  berry db push  # Apply schema to database")
+#         if not quiet:
+#             console.print("\n" + format_message("info", "Next step:"))
+#             console.print("  berry db push  # Apply schema to database")
 
-    except Exception as e:
-        error_console.print(
-            format_message("error", f"Schema generation failed: {str(e)}")
-        )
-        raise typer.Exit(1)
+#     except Exception as e:
+#         error_console.print(
+#             format_message("error", f"Schema generation failed: {str(e)}")
+#         )
+#         raise typer.Exit(1)
 
 
 @db.command()
