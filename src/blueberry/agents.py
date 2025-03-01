@@ -29,10 +29,33 @@ from blueberry.repair_agent import RepairAgent
 class ProjectBuilder:
     def __init__(self):
         self.console = Console()
+          # Create logs directory
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        self.ai_log_file = (
+            log_dir / f"ai_responses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        )
+
+    def _log_ai_response(self, prompt: str, response: any, type: str = "generation"):
+        """Log AI prompt and response"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(self.ai_log_file, "a") as f:
+            f.write(f"\n{'=' * 80}\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"Type: {type}\n")
+            f.write("\n--- Prompt ---\n")
+            f.write(prompt)
+            f.write("\n\n--- Response ---\n")
+            if isinstance(response, (dict, list)):
+                f.write(json.dumps(response, indent=2))
+            else:
+                f.write(str(response))
+            f.write(f"\n{'=' * 80}\n")
 
     def understand_intent(self, user_input: str) -> Intent:
         """Understand the user's intent from the user's input."""
         try:
+            prompt = user_input
             intent = lumos.call_ai(
     messages=[
         {
@@ -77,7 +100,10 @@ class ProjectBuilder:
                 response_format=Intent,
                 model="anthropic/claude-3-5-sonnet-20241022",
             )
-
+            
+            # Log the AI response
+            self._log_ai_response(prompt, intent.model_dump(), "understand_intent")
+            
             return intent
 
         except Exception as e:
@@ -222,6 +248,8 @@ class ProjectBuilder:
             with open(prompt_path, "r") as f:
                 core_prompt = f.read()
 
+            prompt_content = f"Generate specification for: {json.dumps(intent.model_dump(), indent=2)}"
+            
             spec = lumos.call_ai(
     messages=[
         {
@@ -294,12 +322,15 @@ class ProjectBuilder:
         },
         {
             "role": "user",
-            "content": f"Generate specification for: {json.dumps(intent.model_dump(), indent=2)}",
+            "content": prompt_content,
         },
     ],
     response_format=ProjectSpec,
-    model="anthropic/claude-3-5-sonnet-20241022",
+    model="anthropic/claude-3-5-sonnet-20241022"
 )
+
+            # Log the AI prompt and response
+            self._log_ai_response(prompt_content, spec.model_dump(), "create_spec")
 
             return spec
 
@@ -573,14 +604,19 @@ class CodeAgent:
         {core_prompt}
         """
         
-        return (await lumos.call_ai_async(
+        response = await lumos.call_ai_async(
             messages=[
                 {"role": "system", "content": "You are a Next.js 14 Route Handler specialist focusing on type-safety and security."},
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
             model="anthropic/claude-3-5-sonnet-20241022"
-        )).files
+        )
+        
+        # Log the AI prompt and response
+        self._log_ai_response(prompt, response.model_dump(), "api_routes")
+        
+        return response.files
 
 
     async def _generate_components(self, core_prompt: str, api_files: List[FileContent]) -> List[FileContent]:
@@ -636,14 +672,19 @@ class CodeAgent:
         {core_prompt}
         """
         
-        return (await lumos.call_ai_async(
+        response = await lumos.call_ai_async(
             messages=[
                 {"role": "system", "content": "You are a Next.js 14 Component architect specializing in Server and Client Components."},
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
             model="anthropic/claude-3-5-sonnet-20241022"
-        )).files
+        )
+        
+        # Log the AI prompt and response
+        self._log_ai_response(prompt, response.model_dump(), "components")
+        
+        return response.files
 
     async def _generate_pages(
         self, 
@@ -701,14 +742,20 @@ class CodeAgent:
 
                 {core_prompt}
                 """
-        return (await lumos.call_ai_async(
+        
+        response = await lumos.call_ai_async(
             messages=[
                 {"role": "system", "content": "You are a Next.js 14 App Router specialist focusing on proper page structure and data flow."},
                 {"role": "user", "content": prompt}
             ],
             response_format=GeneratedCode,
             model="anthropic/claude-3-5-sonnet-20241022"
-        )).files
+        )
+        
+        # Log the AI prompt and response
+        self._log_ai_response(prompt, response.model_dump(), "pages")
+        
+        return response.files
 
     async def _apply_single_change(self, file: FileContent):
         """Apply a single file change"""
@@ -823,6 +870,9 @@ class CodeAgent:
                 response_format=BuildErrorReport,
             )
 
+            # Log the AI prompt and response
+            self._log_ai_response(prompt, response.model_dump(), "build_error_analysis")
+
             print(response)
 
             return response
@@ -830,60 +880,6 @@ class CodeAgent:
         except Exception as e:
             self.console.print(f"[yellow]AI error analysis failed: {str(e)}[/yellow]")
             return []
-
-    def _parse_build_output(self, output: str) -> List[BuildError]:
-        """Basic fallback parser for build output to extract errors"""
-        errors = []
-        lines = output.splitlines()
-        
-        current_file = None
-        current_error = []
-        in_error = False
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            # Start of error block
-            if "Failed to compile" in line:
-                in_error = True
-                continue
-
-            if not in_error:
-                continue
-
-            # New file indicator
-            if line.startswith("./") or line.startswith("../") or line.endswith(".ts") or line.endswith(".tsx"):
-                if current_file and current_error:
-                    errors.append(BuildError(
-                        file=current_file,
-                        message="\n".join(current_error),
-                        type="error",
-                        line=0,
-                        column=0,
-                        code=""
-                    ))
-                    current_error = []
-                current_file = line.lstrip("./")
-                continue
-
-            # Error message lines
-            if current_file and (line.startswith("Error:") or "Type" in line or "error" in line.lower()):
-                current_error.append(line)
-
-        # Add final error if exists
-        if current_file and current_error:
-            errors.append(BuildError(
-                file=current_file,
-                message="\n".join(current_error),
-                type="error",
-                line=0,
-                column=0,
-                code=""
-            ))
-
-        return errors
 
     async def _repair_code(self, errors: List[BuildError]):
         """Fix build errors using the RepairAgent"""

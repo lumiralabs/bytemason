@@ -24,6 +24,11 @@ class RepairAgent:
         self.backup_dir = self.project_path / ".backups"
         self.backup_dir.mkdir(exist_ok=True)
         
+        # Create logs directory
+        log_dir = Path(project_path) / "logs"
+        log_dir.mkdir(exist_ok=True)
+        self.ai_log_file = log_dir / f"repair_agent_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        
         # Available tools for the agent
         self.tools = {
             "read_file": self._read_file,
@@ -34,6 +39,22 @@ class RepairAgent:
             "analyze_dependencies": self._analyze_dependencies,  # Add new tool
             "list_directory": self._list_directory
         }
+
+    def _log_ai_response(self, prompt: str, response: any, type: str = "repair"):
+        """Log AI prompt and response"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(self.ai_log_file, "a") as f:
+            f.write(f"\n{'=' * 80}\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"Type: {type}\n")
+            f.write("\n--- Prompt ---\n")
+            f.write(prompt)
+            f.write("\n\n--- Response ---\n")
+            if isinstance(response, (dict, list)):
+                f.write(json.dumps(response, indent=2))
+            else:
+                f.write(str(response))
+            f.write(f"\n{'=' * 80}\n")
 
     async def _analyze_build_errors_with_ai(self, build_output: str) -> BuildErrorReport:
         """Use AI to analyze build errors more intelligently"""
@@ -57,6 +78,9 @@ class RepairAgent:
                 model="anthropic/claude-3-5-sonnet-20241022",
                 response_format=BuildErrorReport
             )
+            
+            # Log AI prompt and response
+            self._log_ai_response(prompt, response.model_dump(), "build_error_analysis")
 
             return response
 
@@ -216,6 +240,10 @@ class RepairAgent:
                 model="anthropic/claude-3-5-sonnet-20241022",
                 response_format=AgentResponse
             )
+            
+            # Log AI prompt and response
+            self._log_ai_response(next_prompt, response.model_dump(), f"repair_turn_{turn}")
+            
             self.console.print(f"\n[dim]{response.model_dump_json(indent=2)}[/dim]")
             messages.append({"role": "assistant", "content": response.model_dump_json()})
             
@@ -389,6 +417,9 @@ class RepairAgent:
                 ],
                 model="anthropic/claude-3-5-sonnet-20241022"
             )
+            
+            # Log AI prompt and response
+            self._log_ai_response(prompt, response, "generate_fix")
             
             # Clean up the response
             code = response.replace("```typescript", "").replace("```", "").strip()
