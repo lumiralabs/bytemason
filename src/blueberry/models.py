@@ -74,7 +74,7 @@ class FileContent(BaseModel):
 
 class GeneratedCode(BaseModel):
     files: list[FileContent] = Field(..., description="List of files to create/modify")
-    dependencies: list[str] = Field(
+    dependencies: Optional[list[str]] = Field(
         default_factory=list, description="Additional npm dependencies needed"
     )
     errors: list[str] = Field(

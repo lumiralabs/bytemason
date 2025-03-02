@@ -533,210 +533,281 @@ class CodeAgent:
 
     async def _generate_structured_code(self) -> GeneratedCode:
         """Generate code with maximum context flow: API -> Components -> Pages"""
-        all_files = []
-        
-        # Get core prompt
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(current_dir, "prompts", "core_prompt.md"), "r") as f:
-            core_prompt = f.read()
-        
-        # 1. Generate API routes first
-        api_files = await self._generate_api_routes(core_prompt)
-        all_files.extend(api_files)
-        
-        # 2. Generate components with API context
-        component_files = await self._generate_components(core_prompt, api_files)
-        all_files.extend(component_files)
-        
-        # 3. Generate pages with full context
-        page_files = await self._generate_pages(core_prompt, api_files, component_files)
-        all_files.extend(page_files)
-        
-        return GeneratedCode(files=all_files)
+        try:
+            all_files = []
+            
+            # Get core prompt
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            with open(os.path.join(current_dir, "prompts", "core_prompt.md"), "r") as f:
+                core_prompt = f.read()
+            
+            # 1. Generate API routes first
+            api_files = await self._generate_api_routes(core_prompt)
+            if api_files and len(api_files) > 0:
+                all_files.extend(api_files)
+            
+            # 2. Generate components with API context
+            component_files = await self._generate_components(core_prompt, api_files or [])
+            if component_files and len(component_files) > 0:
+                all_files.extend(component_files)
+            
+            # 3. Generate pages with full context
+            page_files = await self._generate_pages(core_prompt, api_files or [], component_files or [])
+            if page_files and len(page_files) > 0:
+                all_files.extend(page_files)
+            
+            if not all_files:
+                raise ValueError("No files were generated")
+            
+            return GeneratedCode(files=all_files, dependencies=[], errors=[])
+
+        except Exception as e:
+            self.console.print(f"[red]Error in code generation: {str(e)}[/red]")
+            # Return empty GeneratedCode with error instead of raising
+            return GeneratedCode(
+                files=[],
+                dependencies=[],
+                errors=[f"Code generation failed: {str(e)}"]
+            )
 
     async def _generate_api_routes(self, core_prompt: str) -> List[FileContent]:
         """Generate all API routes with database context"""
-        prompt = f"""As a Next.js 14 Route Handler specialist, generate all API routes.
+        try:
+            prompt = f"""As a Next.js 14 Route Handler specialist, generate all API routes.
 
-        Critical Requirements:
-        1. Use Route Handlers (app/api/*/route.ts), NOT pages/api
-        2. Each handler must:
-           - Use proper HTTP methods (GET, POST, PUT, DELETE)
-           - Have proper TypeScript types for request/response
-           - Include error handling with appropriate status codes
-           - don't use any ORM, just use the normal supabase client
-           - ALWAYS return complete entity data after mutations for client-side state updates
-        3. Follow these patterns:
-           - Use NextResponse from 'next/server'
-           - Handle authentication via middleware (already implemented)
-           - Include proper CORS headers where needed
-           - Use edge runtime where beneficial
-        4. Security considerations:
-           - Validate all inputs
-           - Check user permissions
-           - Sanitize responses
+            Critical Requirements:
+            1. Use Route Handlers (app/api/*/route.ts), NOT pages/api
+            2. Each handler must:
+               - Use proper HTTP methods (GET, POST, PUT, DELETE)
+               - Have proper TypeScript types for request/response
+               - Include error handling with appropriate status codes
+               - don't use any ORM, just use the normal supabase client
+               - ALWAYS return complete entity data after mutations for client-side state updates
+            3. Follow these patterns:
+               - Use NextResponse from 'next/server'
+               - Handle authentication via middleware (already implemented)
+               - Include proper CORS headers where needed
+               - Use edge runtime where beneficial
+            4. Security considerations:
+               - Validate all inputs
+               - Check user permissions
+               - Sanitize responses
 
-        Example Route Handler Structure:
+            Example Route Handler Structure:
 
-        ```typescript
-        import {{ NextResponse }} from 'next/server'
-        import {{ createClient }} from '@/libs/supabase/server';
+            ```typescript
+            import {{ NextResponse }} from 'next/server'
+            import {{ createClient }} from '@/libs/supabase/server';
 
-        export async function POST(req: Request) {{
-          try {{
-            const supabase = createClient();
-            const {{ data: {{ session }} }} = await supabase.auth.getSession();
-            const body = await request.json();
-            // Handler logic
-            const data = await supabase
-            .from('table_name')
-            .select('*')
-            .eq('id', body.id)
-            .single();
+            export async function POST(req: Request) {{
+              try {{
+                const supabase = createClient();
+                const {{ data: {{ session }} }} = await supabase.auth.getSession();
+                const body = await request.json();
+                // Handler logic
+                const data = await supabase
+                .from('table_name')
+                .select('*')
+                .eq('id', body.id)
+                .single();
 
-            return NextResponse.json(data);
-          }} catch (error) {{
-            return NextResponse.json(
-              {{ error: 'Validation failed' }},
-              {{ status: 400 }}
+                return NextResponse.json(data);
+              }} catch (error) {{
+                return NextResponse.json(
+                  {{ error: 'Validation failed' }},
+                  {{ status: 400 }}
+                )
+              }}
+            }}
+            ```
+
+            CRITICAL: Your response MUST be in this EXACT JSON format:
+                    {{
+                        "files": [
+                            {{
+                                "path": "string (e.g., app/api/example/route.ts)",
+                                "content": "string (the complete file content)", 
+                                "mode": "create",
+                                "modify_strategy": null   # null if the file is new, only write if the file already exists
+                            }}
+                        ],
+                        "dependencies": [], # npm dependencies if any
+                        "errors": []
+                    }}
+
+            Spec:
+            {json.dumps(self.spec.model_dump(), indent=2)}
+            
+            {core_prompt}
+            """
+            
+            
+            response = await lumos.call_ai_async(
+                messages=[
+                    {"role": "system", "content": "You are a Next.js 14 Route Handler specialist focusing on type-safety and security."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format=GeneratedCode,
+                model="anthropic/claude-3-5-sonnet-20241022"
             )
-          }}
-        }}
-        ```
+            
+            # Add validation logging
+            self.console.print(f"[dim]Debug: API generation response type: {type(response)}[/dim]")
+            self.console.print(f"[dim]Debug: Response content: {response.model_dump()}[/dim]")
+            
+            # Log the AI prompt and response
+            self._log_ai_response(prompt, response.model_dump(), "api_routes")
+            
+            if not hasattr(response, 'files'):
+                self.console.print("[red]Error: Response missing 'files' attribute[/red]")
+                return []
+            
+            return response.files or []
 
-        Spec:
-        {json.dumps(self.spec.model_dump(), indent=2)}
-        
-        {core_prompt}
-        """
-        
-        response = await lumos.call_ai_async(
-            messages=[
-                {"role": "system", "content": "You are a Next.js 14 Route Handler specialist focusing on type-safety and security."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format=GeneratedCode,
-            model="anthropic/claude-3-5-sonnet-20241022"
-        )
-        
-        # Log the AI prompt and response
-        self._log_ai_response(prompt, response.model_dump(), "api_routes")
-        
-        return response.files
-
+        except Exception as e:
+            self.console.print(f"[red]Error in API route generation: {str(e)}[/red]")
+            return []
 
     async def _generate_components(self, core_prompt: str, api_files: List[FileContent]) -> List[FileContent]:
         """Generate components with API context"""
-        api_context = "\n\n".join(f"// {f.path}\n{f.content}" for f in api_files)
-        
-        prompt = f"""As a Next.js 14 Component architect, generate all React components.
+        try:
+            api_context = "\n\n".join(f"// {f.path}\n{f.content}" for f in api_files)
+            
+            prompt = f"""As a Next.js 14 Component architect, generate all React components.
 
-        Critical Requirements:
-        1. Component Location:
-           - ALL components MUST be in components/ directory
-           - Group by feature (e.g., components/todos/, components/profile/)
-           - NO components in app/ directory
-           
-        2. Component Architecture:
-           - Use "use client" for ANY component that requires interactivity
-           - Client Components are REQUIRED for:
-               * Any user interactions (forms, buttons, toggles)
-               * Any state that needs to update in response to user actions
-               * Any component that makes API calls and updates UI
-           - Server Components for static or initial data display only
-           - Use shadcn/ui components from @/components/ui/
-           
-        3. Data Handling:
-           - For ANY mutable data, implement these patterns:
-             * Store entities in local state with useState
-             * Update state IMMEDIATELY after user actions (before API calls)
-             * Call APIs after state updates, not before
-             * Handle API errors with rollback patterns
-           - Use createClient() from '@/libs/supabase/server' for server components
-           - Use createClient() from '@/libs/supabase/client' for client components
-           - Implement proper loading states
-           - Handle errors gracefully
-           - No need to generate components for any auth pattern like signin signout etc.
+            Critical Requirements:
+            1. Component Location:
+               - ALL components MUST be in components/ directory
+               - Group by feature (e.g., components/todos/, components/profile/)
+               - NO components in app/ directory
+               
+            2. Component Architecture:
+               - Use "use client" for ANY component that requires interactivity
+               - Client Components are REQUIRED for:
+                   * Any user interactions (forms, buttons, toggles)
+                   * Any state that needs to update in response to user actions
+                   * Any component that makes API calls and updates UI
+               - Server Components for static or initial data display only
+               - Use shadcn/ui components from @/components/ui/
+               
+            3. Data Handling:
+               - For ANY mutable data, implement these patterns:
+                 * Store entities in local state with useState
+                 * Update state IMMEDIATELY after user actions (before API calls)
+                 * Call APIs after state updates, not before
+                 * Handle API errors with rollback patterns
+               - Use createClient() from '@/libs/supabase/server' for server components
+               - Use createClient() from '@/libs/supabase/client' for client components
+               - Implement proper loading states
+               - Handle errors gracefully
+               - No need to generate components for any auth pattern like signin signout etc.
 
-        4. Common Patterns for ALL interactive components:
-            - Create/Update: Update local state first, then call API
-            - Delete: Remove from local state first, then call API
-            - Toggle/Status Change: Update UI first, then persist via API
-            - Lists: Always use unique "key" props and optimistic updates
-            - Forms: Control form state locally, submit with optimistic feedback
-           
-        Example Interactive Component Pattern (applicable to ANY entity type):
-        ```typescript
-        'use client';
-        
-        import {{ useState }} from 'react';
-        import {{ Button }} from '@/components/ui/button';
-        
-        interface EntityProps {{
-        initialEntities: any[];
-        }}
-        
-        export default function EntityManager({{ initialEntities }}: EntityProps) {{
-        // Local state management - critical for immediate UI updates
-        const [entities, setEntities] = useState(initialEntities);
-        
-        // Create operation pattern
-        async function createEntity(newEntityData: any) {{
-            // 1. Generate temporary ID for optimistic UI
-            const tempId = Date.now().toString();
+            4. Common Patterns for ALL interactive components:
+                - Create/Update: Update local state first, then call API
+                - Delete: Remove from local state first, then call API
+                - Toggle/Status Change: Update UI first, then persist via API
+                - Lists: Always use unique "key" props and optimistic updates
+                - Forms: Control form state locally, submit with optimistic feedback
+               
+            Example Interactive Component Pattern (applicable to ANY entity type):
+            ```typescript
+            'use client';
             
-            // 2. Update UI immediately with optimistic data
-            const optimisticEntity = {{ id: tempId, ...newEntityData }};
-            setEntities(prev => [...prev, optimisticEntity]);
+            import {{ useState }} from 'react';
+            import {{ Button }} from '@/components/ui/button';
             
-            // 3. Call API to persist
-            try {{
-            const response = await fetch('/api/entities', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify(newEntityData),
-            }});
-            
-            const {{ data }} = await response.json();
-            
-            // 4. Update with real server data
-            setEntities(prev => prev.map(entity => 
-                entity.id === tempId ? data : entity
-            ));
-            }} catch (error) {{
-            // 5. Rollback on error
-            setEntities(prev => prev.filter(entity => entity.id !== tempId));
-            // Handle error notification
+            interface EntityProps {{
+            initialEntities: any[];
             }}
-        }}
-        
-        // Similar patterns for update and delete operations
-        // [Implementation details would vary by entity type]
-        }}
-        ```
+            
+            export default function EntityManager({{ initialEntities }}: EntityProps) {{
+            // Local state management - critical for immediate UI updates
+            const [entities, setEntities] = useState(initialEntities);
+            
+            // Create operation pattern
+            async function createEntity(newEntityData: any) {{
+                // 1. Generate temporary ID for optimistic UI
+                const tempId = Date.now().toString();
+                
+                // 2. Update UI immediately with optimistic data
+                const optimisticEntity = {{ id: tempId, ...newEntityData }};
+                setEntities(prev => [...prev, optimisticEntity]);
+                
+                // 3. Call API to persist
+                try {{
+                const response = await fetch('/api/entities', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(newEntityData),
+                }});
+                
+                const {{ data }} = await response.json();
+                
+                // 4. Update with real server data
+                setEntities(prev => prev.map(entity => 
+                    entity.id === tempId ? data : entity
+                ));
+                }} catch (error) {{
+                // 5. Rollback on error
+                setEntities(prev => prev.filter(entity => entity.id !== tempId));
+                // Handle error notification
+                }}
+            }}
+            
+            // Similar patterns for update and delete operations
+            // [Implementation details would vary by entity type]
+            }}
+            ```
 
-        Available Route Handlers:
-        {api_context}
+            Available Route Handlers:
+            {api_context}
 
-        Spec:
-        {json.dumps(self.spec.model_dump(), indent=2)}
+            CRITICAL: Your response MUST be in this EXACT JSON format:
+                    {{
+                        "files": [
+                            {{
+                                "path": "string (e.g., components/example/ExampleComponent.tsx)",
+                                "content": "string (the complete file content)", 
+                                "mode": "create",
+                                "modify_strategy": null   # null if the file is new, only write if the file already exists
+                            }}
+                        ],
+                        "dependencies": [], # npm dependencies if any
+                        "errors": []
+                    }}
+
+            Spec:
+            {json.dumps(self.spec.model_dump(), indent=2)}
+            
+            {core_prompt}
+            """
         
-        {core_prompt}
-        """
-        
-        response = await lumos.call_ai_async(
-            messages=[
-                {"role": "system", "content": "You are a Next.js 14 Component architect specializing in Server and Client Components."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format=GeneratedCode,
-            model="anthropic/claude-3-5-sonnet-20241022"
-        )
-        
-        # Log the AI prompt and response
-        self._log_ai_response(prompt, response.model_dump(), "components")
-        
-        return response.files
+            
+            response = await lumos.call_ai_async(
+                messages=[
+                    {"role": "system", "content": "You are a Next.js 14 Component architect specializing in Server and Client Components."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format=GeneratedCode,
+                model="anthropic/claude-3-5-sonnet-20241022"
+            )
+            
+            # Add validation logging
+            self.console.print(f"[dim]Debug: Component generation response type: {type(response)}[/dim]")
+            self.console.print(f"[dim]Debug: Response content: {response.model_dump()}[/dim]")
+            
+            # Log the AI prompt and response
+            self._log_ai_response(prompt, response.model_dump(), "components")
+            
+            if not hasattr(response, 'files'):
+                self.console.print("[red]Error: Response missing 'files' attribute[/red]")
+                return []
+            
+            return response.files or []
+
+        except Exception as e:
+            self.console.print(f"[red]Error in component generation: {str(e)}[/red]")
+            return []
 
     async def _generate_pages(
         self, 
@@ -745,73 +816,103 @@ class CodeAgent:
         component_files: List[FileContent]
     ) -> List[FileContent]:
         """Generate pages with full context"""
-        context = {
-            'api': "\n\n".join(f"// {f.path}\n{f.content}" for f in api_files),
-            'components': "\n\n".join(f"// {f.path}\n{f.content}" for f in component_files)
-        }
-        
-        prompt = f"""As a Next.js 14 App Router specialist, generate all necessary pages in strict accordance with the following guidelines.
+        try:
+            context = {
+                'api': "\n\n".join(f"// {f.path}\n{f.content}" for f in api_files),
+                'components': "\n\n".join(f"// {f.path}\n{f.content}" for f in component_files)
+            }
+            
+            prompt = f"""As a Next.js 14 App Router specialist, generate all necessary pages in strict accordance with the following guidelines.
 
-                Critical Requirements:
-                1. File & Folder Structure:
-                - All pages must reside within the 'app/' directory.
-                - Use 'page.tsx' for public routes.
-                - Include 'layout.tsx' for shared layout.
-                - Provide a landing page at 'app/page.tsx'.
-                2. Page Architecture:
-                - Default to Client Components.
-                - All necessary components must be imported from '@/components/' using correct aliasing.
-                - Ensure proper use of Next.js navigation (e.g., useRouter from 'next/navigation').
-                3. Data Flow & Best Practices:
-                - Fetch data within Server Components and pass it as props.
-                - Implement suspense boundaries and proper loading states.
-                - Validate all client interactions, incorporating appropriate auth checks where needed.
-                4. Example Page Structure:
-                ```typescript
-                import {{ createClient }} from '@/libs/supabase/server';
-                import TodoList from '@/components/todos/TodoList';
+                    Critical Requirements:
+                    1. File & Folder Structure:
+                    - All pages must reside within the 'app/' directory.
+                    - Use 'page.tsx' for public routes.
+                    - Include 'layout.tsx' for shared layout.
+                    - Provide a landing page at 'app/page.tsx'.
+                    2. Page Architecture:
+                    - Default to Client Components.
+                    - All necessary components must be imported from '@/components/' using correct aliasing.
+                    - Ensure proper use of Next.js navigation (e.g., useRouter from 'next/navigation').
+                    3. Data Flow & Best Practices:
+                    - Fetch data within Server Components and pass it as props.
+                    - Implement suspense boundaries and proper loading states.
+                    - Validate all client interactions, incorporating appropriate auth checks where needed.
+                    4. Example Page Structure:
+                    ```typescript
+                    import {{ createClient }} from '@/libs/supabase/server';
+                    import TodoList from '@/components/todos/TodoList';
 
-                export default async function DashboardPage() {{
-                const supabase = createClient()
-                // Fetch page-specific data
-                return <TodoList />
-                }}
-                ```
-                5. landing page is app/page.tsx
-                - create a good landing page with a nice UI/UX, it should have buttons and features to navigate to the main app, if there is a component for the landing page, use it.
+                    export default async function DashboardPage() {{
+                    const supabase = createClient()
+                    // Fetch page-specific data
+                    return <TodoList />
+                    }}
+                    ```
+                    5. landing page is app/page.tsx
+                    - create a good landing page with a nice UI/UX, it should have buttons and features to navigate to the main app, if there is a component for the landing page, use it.
 
-                Validation Checklist:
-                - Verify that the file structure adheres to Next.js 14 App Router conventions.
-                - Ensure that every referenced component is imported with the correct alias.
-                - Ensure that the landing page is created at app/page.tsx
-                - Ensure that all the created components are used at least once in a page
-                - Confirm the existence of key files (layout.tsx, page.tsx) in the proper locations.
+                    Validation Checklist:
+                    - Verify that the file structure adheres to Next.js 14 App Router conventions.
+                    - Ensure that every referenced component is imported with the correct alias.
+                    - Ensure that the landing page is created at app/page.tsx
+                    - Ensure that all the created components are used at least once in a page
+                    - Confirm the existence of key files (layout.tsx, page.tsx) in the proper locations.
 
-                Available Components:
-                {context['components']}
+                    Available Components:
+                    {context['components']}
 
-                Available Route Handlers:
-                {context['api']}
+                    Available Route Handlers:
+                    {context['api']}
 
-                Spec:
-                {json.dumps(self.spec.model_dump(), indent=2)}
+                    CRITICAL: Your response MUST be in this EXACT JSON format:
+                    {{
+                        "files": [
+                            {{
+                                "path": "string (e.g., app/example/ExamplePage.tsx)",
+                                "content": "string (the complete file content)", 
+                                "mode": "create",
+                                "modify_strategy": null   # null if the file is new, only write if the file already exists
+                            }}
+                        ],
+                        "dependencies": [], # npm dependencies if any
+                        "errors": []
+                    }}
 
-                {core_prompt}
-                """
-        
-        response = await lumos.call_ai_async(
-            messages=[
-                {"role": "system", "content": "You are a Next.js 14 App Router specialist focusing on proper page structure and data flow."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format=GeneratedCode,
-            model="anthropic/claude-3-5-sonnet-20241022"
-        )
-        
-        # Log the AI prompt and response
-        self._log_ai_response(prompt, response.model_dump(), "pages")
-        
-        return response.files
+                    Spec:
+                    {json.dumps(self.spec.model_dump(), indent=2)}
+
+                    {core_prompt}
+                    """
+            
+            
+
+            
+            response = await lumos.call_ai_async(
+                messages=[
+                    {"role": "system", "content": "You are a Next.js 14 App Router specialist focusing on proper page structure and data flow."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format=GeneratedCode,
+                model="anthropic/claude-3-5-sonnet-20241022"
+            )
+            
+            # Add validation logging
+            self.console.print(f"[dim]Debug: Page generation response type: {type(response)}[/dim]")
+            self.console.print(f"[dim]Debug: Response content: {response.model_dump()}[/dim]")
+            
+            # Log the AI prompt and response
+            self._log_ai_response(prompt, response.model_dump(), "pages")
+            
+            if not hasattr(response, 'files'):
+                self.console.print("[red]Error: Response missing 'files' attribute[/red]")
+                return []
+            
+            return response.files or []
+
+        except Exception as e:
+            self.console.print(f"[red]Error in page generation: {str(e)}[/red]")
+            return []
 
     async def _apply_single_change(self, file: FileContent):
         """Apply a single file change"""
