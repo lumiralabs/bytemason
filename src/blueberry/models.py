@@ -105,7 +105,7 @@ class ErrorAnalysis(BaseModel):
 class AgentAction(BaseModel):
     """Action to be taken by the repair agent"""
     tool: str = Field(..., description="Name of the tool to use")
-    input: str = Field(..., description="Input for the tool as a string")
+    input: Any = Field(..., description="Input for the tool as a string")
     thought: str = Field(..., description="Reasoning behind this action")
 
 
