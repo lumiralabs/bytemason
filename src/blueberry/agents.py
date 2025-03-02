@@ -407,8 +407,13 @@ class CodeAgent:
         for file_path in self.project_path.rglob("*"):
             if file_path.is_file():
                 relative_path = str(file_path.relative_to(self.project_path))
-                # Skip .git files and ignored patterns
-                if not relative_path.startswith(".git/") and not self._should_ignore(relative_path):
+                # Skip .git, .next, .lumos files/folders, .gitignore and ignored patterns
+                if (not relative_path.startswith(".git/") and 
+                    not relative_path.startswith(".next/") and
+                    not relative_path.startswith(".lumos") and
+                    not relative_path == ".lumos" and
+                    not relative_path == ".gitignore" and
+                    not self._should_ignore(relative_path)):
                     files[relative_path] = file_path
                     self.console.print(f"[dim]Found: {relative_path}[/dim]")
         return files
@@ -560,6 +565,7 @@ class CodeAgent:
            - Have proper TypeScript types for request/response
            - Include error handling with appropriate status codes
            - don't use any ORM, just use the normal supabase client
+           - ALWAYS return complete entity data after mutations for client-side state updates
         3. Follow these patterns:
            - Use NextResponse from 'next/server'
            - Handle authentication via middleware (already implemented)
@@ -632,34 +638,80 @@ class CodeAgent:
            - NO components in app/ directory
            
         2. Component Architecture:
-           - Server Components by default (no "use client" unless needed)
-           - Client Components only for:
-             * Interactivity (onClick, onChange)
-             * Browser APIs
-             * React hooks
-             * Client state
+           - Use "use client" for ANY component that requires interactivity
+           - Client Components are REQUIRED for:
+               * Any user interactions (forms, buttons, toggles)
+               * Any state that needs to update in response to user actions
+               * Any component that makes API calls and updates UI
+           - Server Components for static or initial data display only
            - Use shadcn/ui components from @/components/ui/
            
         3. Data Handling:
-           - Use Server Components for data fetching
+           - For ANY mutable data, implement these patterns:
+             * Store entities in local state with useState
+             * Update state IMMEDIATELY after user actions (before API calls)
+             * Call APIs after state updates, not before
+             * Handle API errors with rollback patterns
            - Use createClient() from '@/libs/supabase/server' for server components
            - Use createClient() from '@/libs/supabase/client' for client components
            - Implement proper loading states
            - Handle errors gracefully
+           - No need to generate components for any auth pattern like signin signout etc.
+
+        4. Common Patterns for ALL interactive components:
+            - Create/Update: Update local state first, then call API
+            - Delete: Remove from local state first, then call API
+            - Toggle/Status Change: Update UI first, then persist via API
+            - Lists: Always use unique "key" props and optimistic updates
+            - Forms: Control form state locally, submit with optimistic feedback
            
-        Example Component Structure:
+        Example Interactive Component Pattern (applicable to ANY entity type):
         ```typescript
-        // components/todos/TodoList.tsx
-        import {{ createClient }} from '@/libs/supabase/server'
-        import {{ Button }} from '@/components/ui/button'
-
-        interface TodoListProps {{
-          initialTodos?: Todo[]
+        'use client';
+        
+        import {{ useState }} from 'react';
+        import {{ Button }} from '@/components/ui/button';
+        
+        interface EntityProps {{
+        initialEntities: any[];
         }}
-
-        export default async function TodoList({{ props }}: TodoListProps) {{
-          const supabase = createClient()
-          // Component logic
+        
+        export default function EntityManager({{ initialEntities }}: EntityProps) {{
+        // Local state management - critical for immediate UI updates
+        const [entities, setEntities] = useState(initialEntities);
+        
+        // Create operation pattern
+        async function createEntity(newEntityData: any) {{
+            // 1. Generate temporary ID for optimistic UI
+            const tempId = Date.now().toString();
+            
+            // 2. Update UI immediately with optimistic data
+            const optimisticEntity = {{ id: tempId, ...newEntityData }};
+            setEntities(prev => [...prev, optimisticEntity]);
+            
+            // 3. Call API to persist
+            try {{
+            const response = await fetch('/api/entities', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify(newEntityData),
+            }});
+            
+            const {{ data }} = await response.json();
+            
+            // 4. Update with real server data
+            setEntities(prev => prev.map(entity => 
+                entity.id === tempId ? data : entity
+            ));
+            }} catch (error) {{
+            // 5. Rollback on error
+            setEntities(prev => prev.filter(entity => entity.id !== tempId));
+            // Handle error notification
+            }}
+        }}
+        
+        // Similar patterns for update and delete operations
+        // [Implementation details would vary by entity type]
         }}
         ```
 
@@ -707,7 +759,7 @@ class CodeAgent:
                 - Include 'layout.tsx' for shared layout.
                 - Provide a landing page at 'app/page.tsx'.
                 2. Page Architecture:
-                - Default to Server Components.
+                - Default to Client Components.
                 - All necessary components must be imported from '@/components/' using correct aliasing.
                 - Ensure proper use of Next.js navigation (e.g., useRouter from 'next/navigation').
                 3. Data Flow & Best Practices:
@@ -725,10 +777,14 @@ class CodeAgent:
                 return <TodoList />
                 }}
                 ```
+                5. landing page is app/page.tsx
+                - create a good landing page with a nice UI/UX, it should have buttons and features to navigate to the main app, if there is a component for the landing page, use it.
 
                 Validation Checklist:
                 - Verify that the file structure adheres to Next.js 14 App Router conventions.
                 - Ensure that every referenced component is imported with the correct alias.
+                - Ensure that the landing page is created at app/page.tsx
+                - Ensure that all the created components are used at least once in a page
                 - Confirm the existence of key files (layout.tsx, page.tsx) in the proper locations.
 
                 Available Components:
@@ -918,10 +974,9 @@ class SupabaseSetupAgent:
                         Include:
                         1. Table creation with proper types and constraints
                         2. Indexes if any
-                        3. Initial seed data if needed
                         4. Do not include any RLS policies
                         
-                        Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, just code. Do not wrap the code in ```sql tags.""",
+                        Format as a single SQL file with proper ordering of operations. dont include any other text no markdown, no dummy data, just code. Do not wrap the code in ```sql tags.""",
                     },
                     {
                         "role": "user",
@@ -1056,9 +1111,9 @@ class SupabaseSetupAgent:
 
             # Create .env.local with correct Supabase environment variables
             env_content = f"""NEXT_PUBLIC_SUPABASE_URL=https://{project_ref}.supabase.co
-            NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
-            SUPABASE_SERVICE_ROLE_KEY={service_key}
-            """
+NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_key}
+SUPABASE_SERVICE_ROLE_KEY={service_key}"""
+
             # Write to .env.local in the project directory
             env_file = Path(self.project_path) / ".env.local"
             env_file.write_text(env_content)

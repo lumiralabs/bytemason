@@ -161,7 +161,7 @@ class RepairAgent:
 
         jsonCopy{
         "tool": "read_file",
-        "input": "src/components/Button.tsx",
+        "input": "components/Button.tsx",
         "thought": "Need to examine the current Button component implementation"
         }
         write_file
@@ -173,7 +173,7 @@ class RepairAgent:
         jsonCopy{
         "tool": "write_file",
         "input": {
-            "path": "src/components/Button.tsx",
+            "path": "components/Button.tsx",
             "content": "// Updated file content here"
         },
         "thought": "Implementing fixed Button component with proper type definitions"
@@ -187,7 +187,7 @@ class RepairAgent:
         jsonCopy{
         "tool": "generate_fix",
         "input": {
-            "file": "src/components/Button.tsx",
+            "file": "components/Button.tsx",
             "current_content": "// Current problematic code",
             "error": "Type '{ children: string; }' is not assignable to type 'IntrinsicAttributes'"
         },
@@ -202,7 +202,7 @@ class RepairAgent:
         jsonCopy{
         "tool": "analyze_dependencies",
         "input": {
-            "file": "src/pages/index.tsx",
+            "file": "pages/index.tsx",
             "import": "import { Button } from '@/components/ui/button'"
         },
         "thought": "Checking if the Button component exists at the specified import path"
@@ -215,7 +215,7 @@ class RepairAgent:
 
         jsonCopy{
         "tool": "list_directory",
-        "input": "src/components",
+        "input": "components",
         "thought": "Looking for existing UI components that might be referenced"
         }
         </tools>
@@ -503,14 +503,13 @@ class RepairAgent:
                 # Relative import
                 target_path = (current_dir / import_path).resolve()
             elif import_path.startswith('@/'):
-                # Path alias starting with @/ - typically maps to src/ or project root
-                # First try src/ folder common in Next.js projects
+                # Path alias starting with @/ - typically maps to project root
                 alias_path = import_path[2:]  # Remove '@/'
-                target_path = (self.project_path / 'src' / alias_path)
+                target_path = self.project_path / alias_path
                 
-                # If src/ doesn't exist, try from project root
-                if not (self.project_path / 'src').exists():
-                    target_path = self.project_path / alias_path
+                # # If src/ doesn't exist, try from project root
+                # if not (self.project_path / 'src').exists():
+                #     target_path = self.project_path / alias_path
             else:
                 # Non-relative import (node_modules or absolute)
                 target_path = self.project_path / import_path

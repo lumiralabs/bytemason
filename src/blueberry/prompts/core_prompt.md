@@ -685,3 +685,4 @@ redirect(config.auth.callbackUrl);
 ```
 
 A signin page is already created that have supabase magic link and google oauth. you can just redirect to that page (app/signin) DONT CREATE ANY NEW SIGNIN or SIGNUP PAGE.
+An account info and signout component is already created in the component/ButtonAccount.tsx file. you can just use that component. to handle the account info and signout.

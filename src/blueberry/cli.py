@@ -614,10 +614,9 @@ def plan(
         if not quiet:
             console.print("\n" + format_message("info", "Next steps:"))
             console.print("  1. Review the specification")
-            console.print("  2. berry db setup  # Configure database")
-            console.print(f"  3. berry db generate {spec_file}  # Generate database schema")
-            console.print(f"  4. berry db push {spec_file}  # Apply schema to database")
-            console.print(f"  5. berry code {spec_file}  # Generate code")
+            console.print(f"  2. berry db setup {spec_file} # Configure database and generate schema")
+            console.print(f"  3. berry db push {spec_file}  # Apply schema to database")
+            console.print(f"  4. berry code {spec_file}  # Generate code")
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
         raise typer.Exit(1)
@@ -719,12 +718,6 @@ def setup(
             console.print(format_message("info", "Setting up environment..."))
         agent.setup_environment(project_ref, anon_key, service_key)
 
-        # Initialize project
-        if not quiet:
-            console.print(format_message("info", "Initializing database..."))
-        agent.initialize_project(project_ref)
-        
-        console.print(format_message("success", "Database setup complete!"))
         
         # Generate schema if spec is provided
         if spec:
@@ -750,8 +743,13 @@ def setup(
             console.print(
                 format_message("success", f"Generated schema: {migration_file}")
             )
-            
+
+            # Initialize project
             if not quiet:
+                console.print(format_message("info", "Initializing database..."))
+                agent.initialize_project(project_ref)
+            
+                console.print(format_message("success", "Database setup complete!"))
                 console.print("\n" + format_message("info", "Next step:"))
                 console.print("  berry db push  # Apply schema to database")
         else:
