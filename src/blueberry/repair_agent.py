@@ -75,7 +75,8 @@ class RepairAgent:
                     {"role": "system", "content": "You are an expert at analyzing Next.js 14 app router and TypeScript build errors."},
                     {"role": "user", "content": prompt}
                 ],
-                model="anthropic/claude-3-5-sonnet-20241022",
+                # model="anthropic/claude-3-5-sonnet-20241022",
+                model = 'gpt-4o',
                 response_format=BuildErrorReport
             )
             
@@ -265,7 +266,8 @@ class RepairAgent:
             messages.append({"role": "user", "content": next_prompt})
             response = await lumos.call_ai_async(
                 messages=messages,
-                model="anthropic/claude-3-5-sonnet-20241022",
+                # model="anthropic/claude-3-5-sonnet-20241022",
+                  model = 'gpt-4o',
                 response_format=AgentResponse
             )
             
@@ -443,7 +445,8 @@ class RepairAgent:
                     {"role": "system", "content": "You are a senior expert Next.js 14 app router and TypeScript developer who first identifies the root cause of the error and then plans out a fix and then implement it with all the edge cases in mind. Provide only the fixed code with no explanation."},
                     {"role": "user", "content": prompt}
                 ],
-                model="anthropic/claude-3-5-sonnet-20241022"
+                # model="anthropic/claude-3-5-sonnet-20241022"
+                  model = 'gpt-4o',
             )
             
             # Log AI prompt and response
@@ -482,56 +485,190 @@ class RepairAgent:
                 
             import_path = import_path_match.group(1)
             
+            # Extract the imported symbols
+            imported_symbols = []
+            symbols_match = re.search(r'import\s+{([^}]+)}', import_stmt)
+            if symbols_match:
+                imported_symbols = [s.strip() for s in symbols_match.group(1).split(',')]
+            elif "import " in import_stmt and " from " in import_stmt:
+                default_import = re.search(r'import\s+([^{]\S+)', import_stmt)
+                if default_import:
+                    imported_symbols = [default_import.group(1).strip()]
+            
             # Resolve the full path of the imported file
             current_dir = (self.project_path / file_path).parent
+            
+            # Handle different import types
             if import_path.startswith('.'):
                 # Relative import
                 target_path = (current_dir / import_path).resolve()
+            elif import_path.startswith('@/'):
+                # Path alias starting with @/ - typically maps to src/ or project root
+                # First try src/ folder common in Next.js projects
+                alias_path = import_path[2:]  # Remove '@/'
+                target_path = (self.project_path / 'src' / alias_path)
+                
+                # If src/ doesn't exist, try from project root
+                if not (self.project_path / 'src').exists():
+                    target_path = self.project_path / alias_path
             else:
                 # Non-relative import (node_modules or absolute)
                 target_path = self.project_path / import_path
                 
+            # Track if we need file extension resolution
+            needs_extension = not target_path.suffix
+            needs_index = False
+                
             # Add common extensions if no extension specified
-            if not target_path.suffix:
+            if needs_extension:
                 possible_extensions = ['.ts', '.tsx', '.js', '.jsx']
                 for ext in possible_extensions:
                     if target_path.with_suffix(ext).exists():
                         target_path = target_path.with_suffix(ext)
+                        needs_extension = False
                         break
                     elif (target_path / 'index').with_suffix(ext).exists():
                         target_path = (target_path / 'index').with_suffix(ext)
+                        needs_extension = False
+                        needs_index = True
                         break
-                        
-            # Before checking if file exists, list the directory to find similar files
-            dir_path = target_path.parent
-            dir_listing = await self._list_directory(str(dir_path.relative_to(self.project_path)))
             
-            if not target_path.exists():
-                # Check for case-insensitive matches
-                target_name = target_path.name.lower()
-                similar_files = [
-                    f for f in dir_listing.files 
-                    if Path(f).name.lower() == target_name
-                ]
+            # Before checking if file exists, list the directory to find similar files
+            try:
+                dir_path = target_path.parent
+                if not needs_extension:
+                    dir_listing = await self._list_directory(str(dir_path.relative_to(self.project_path)))
+                else:
+                    # If still resolving extension, use what we have
+                    dir_listing = await self._list_directory(str(dir_path.relative_to(self.project_path)))
+            except Exception:
+                dir_listing = DirectoryListing(
+                    path=str(dir_path),
+                    exists=False,
+                    is_empty=True,
+                    files=[],
+                    directories=[],
+                    error="Error listing directory"
+                )
                 
-                if similar_files:
+            # Check if the file exists
+            if target_path.exists():
+                # File exists, return its content
+                try:
+                    content = target_path.read_text()
                     return FileOperation(
                         success=True,
-                        message=f"Found similar file with different case: {similar_files[0]}",
-                        path=similar_files[0],
-                        suggested_action="update_import"
+                        message=f"Found existing file at {target_path.relative_to(self.project_path)}",
+                        path=str(target_path.relative_to(self.project_path)),
+                        content=content
                     )
-                    
-                # Continue with existing missing file handling...
+                except Exception as e:
+                    return FileOperation(
+                        success=False,
+                        message=f"File exists but couldn't be read: {str(e)}",
+                        path=str(target_path.relative_to(self.project_path))
+                    )
+            else:
+                # File doesn't exist, look for similar files or suggest creation
                 
-            # Rest of existing _analyze_dependencies code...
-            
+                # Check for case-insensitive matches
+                if dir_listing.files:
+                    target_name = target_path.name.lower()
+                    similar_files = [
+                        f for f in dir_listing.files 
+                        if Path(f).name.lower() == target_name
+                    ]
+                    
+                    if similar_files:
+                        return FileOperation(
+                            success=True,
+                            message=f"Found similar file with different case: {similar_files[0]}",
+                            path=similar_files[0],
+                            suggested_action="update_import"
+                        )
+                
+                # Try to determine best extension for file creation
+                if needs_extension:
+                    # First try to match the importing file's extension
+                    if file_path.suffix in ['.tsx', '.jsx']:
+                        suggested_extension = '.tsx' if '.ts' in file_path.suffix else '.jsx'
+                    else:
+                        suggested_extension = '.ts' if '.ts' in file_path.suffix else '.js'
+                    
+                    # Add index/ suffix if it seems to be a directory
+                    if needs_index or (dir_listing.exists and dir_listing.is_empty):
+                        proposed_path = str((target_path / f"index{suggested_extension}").relative_to(self.project_path))
+                    else:
+                        proposed_path = str(target_path.with_suffix(suggested_extension).relative_to(self.project_path))
+                    
+                    # Generate suggested template based on imported symbols
+                    is_component = any(symbol[0].isupper() for symbol in imported_symbols)
+                    template = self._generate_template_content(imported_symbols, is_component, suggested_extension.endswith('x'))
+                    
+                    return FileOperation(
+                        success=True,
+                        message=f"File not found, should be created at: {proposed_path}",
+                        path=proposed_path,
+                        suggested_action="create_file",
+                        content=template
+                    )
+                
+                return FileOperation(
+                    success=False,
+                    message=f"Import target not found: {import_path}",
+                    path=str(file_path)
+                )
+                
         except Exception as e:
             return FileOperation(
                 success=False,
                 message=f"Error analyzing dependencies: {str(e)}",
                 path=data["file"]
             )
+            
+    def _generate_template_content(self, symbols: List[str], is_component: bool, is_react: bool) -> str:
+        """Generate template content based on imported symbols."""
+        content = []
+        
+        # Add client directive for React components
+        if is_react and is_component:
+            content.append('"use client";')
+            content.append("")
+        
+        # Add React import for components
+        if is_react:
+            content.append('import React from "react";')
+            content.append("")
+        
+        # Generate exports based on symbols
+        if is_component:
+            # Generate component exports
+            for symbol in symbols:
+                if symbol[0].isupper():  # Component names start with uppercase
+                    content.append(f"export interface {symbol}Props {{")
+                    content.append("  // Define your props here")
+                    content.append("}")
+                    content.append("")
+                    content.append(f"export function {symbol}({{ ...props }}: {symbol}Props) {{")
+                    content.append("  return (")
+                    content.append('    <div className="component">')
+                    content.append(f'      <h2>{symbol}</h2>')
+                    content.append('      <p>Component implementation</p>')
+                    content.append('    </div>')
+                    content.append('  );')
+                    content.append('}')
+                else:
+                    # For non-component exports in a component file
+                    content.append(f"export const {symbol} = null; // Replace with actual implementation")
+        else:
+            # Generate non-component exports
+            for symbol in symbols:
+                if symbol.startswith('type ') or symbol.startswith('interface '):
+                    content.append(f"export {symbol} = {{}}; // Replace with actual type definition")
+                else:
+                    content.append(f"export const {symbol} = null; // Replace with actual implementation")
+        
+        return "\n".join(content)
 
     async def _list_directory(self, dir_path: str, recursive: bool = True) -> DirectoryListing:
         """List contents of a directory, including subdirectories if recursive=True."""
