@@ -1,0 +1,264 @@
+# How ByteMason Works
+
+Let's dive into how ByteMason turns your ideas into working applications. We'll explain the process in both simple and technical terms.
+
+## The Journey of Your Idea
+
+When you use ByteMason, your idea goes through three main phases:
+
+### Phase 1: Understanding & Planning
+
+When you run `berry new`, it clones the boilerplate that contains foundational logic.
+
+1. **Sets Up the Project**
+   ```bash
+   your-app/
+   ├── app/              # Your pages and routes
+   ├── components/       # Reusable UI parts
+   ├── lib/             # Helper functions
+   ```
+
+When you run `berry plan`, ByteMason:
+
+1. **Reads Your Description**
+   - Takes your natural language description
+   - Understands what features you need
+   - Plans the application structure
+
+2. **Creates a Specification**
+   This is like a detailed blueprint that includes:
+   ```json
+   {
+     "name": "TODO master",
+     "description": "A web application for managing personal todo lists, leveraging Supabase for backend tasks such as authentication, authorization, and real-time data synchronization, and Next.js 14 for building front-end interfaces.",
+     "features": [
+       "User Authentication: Implement secure user signup, login, and logout using Supabase's auth capabilities.",
+       "Password Management: Ensure password policies are enforced and allow for password reset functionality.", 
+       "Todo Management: Allow users to create, read, update, and delete (CRUD) todo items.",
+       "User-specific Todo Lists: Ensure each user can only see their own list of todos.",
+       "Data Modeling: Create a 'Todos' table with fields such as id, user_id (foreign key), title, description, completed (boolean), and created_at (timestamp).",
+       "API Endpoints: Develop endpoints for handling todo CRUD operations securely, utilizing Next.js app router functionalities.",
+       "Real-time Updates: Enable real-time syncing of todos across client devices using Supabase's real-time features.",
+       "Input Validation: Ensure proper validation on all forms to prevent incorrect data input and enhance security.",
+       "Authorization: Use Supabase RLS (Row Level Security) policies to ensure users can only access their data.",
+       "Error Handling: Implement thorough error handling both client-side and server-side to manage and notify of any issues gracefully."
+     ],
+     "structure": {
+       "pages": [
+         {
+           "path": "/dashboard",
+           "description": "Main interface for users to view and manage their todo lists.",
+           "api_routes": [
+             "/api/todos"
+           ],
+           "components": [
+             "DashboardLayout",
+             "TodoList", 
+             "AddTodoForm",
+             "EditTodoModal"
+           ]
+         },
+         {
+           "path": "/profile",
+           "description": "Allows users to view and edit their profile information, including password reset.",
+           "api_routes": [],
+           "components": [
+             "ProfileLayout",
+             "ProfileDetails",
+             "PasswordResetForm"
+           ]
+         },
+         {
+           "path": "/todos",
+           "description": "Displays the list of todos for the authenticated user and allows management actions.",
+           "api_routes": [
+             "/api/todos"
+           ],
+           "components": [
+             "TodoList",
+             "AddTodoForm",
+             "EditTodoModal"
+           ]
+         }
+       ],
+       "components": [
+         {
+           "name": "DashboardLayout",
+           "description": "Layout for the dashboard page.",
+           "is_client": false
+         },
+         {
+           "name": "TodoList",
+           "description": "Displays a list of todos with options to edit or delete them.",
+           "is_client": true
+         },
+         {
+           "name": "AddTodoForm",
+           "description": "Form component to add new todos.",
+           "is_client": true
+         },
+         {
+           "name": "EditTodoModal",
+           "description": "Modal dialog for editing existing todos.",
+           "is_client": true
+         },
+         {
+           "name": "ProfileLayout",
+           "description": "Layout for the profile page.",
+           "is_client": false
+         },
+         {
+           "name": "ProfileDetails",
+           "description": "Displays user's profile information.",
+           "is_client": true
+         },
+         {
+           "name": "PasswordResetForm",
+           "description": "Form to reset the user's password.",
+           "is_client": true
+         }
+       ],
+       "api_routes": [
+         {
+           "path": "/api/todos",
+           "method": "GET",
+           "description": "Fetches the list of todos for the authenticated user.",
+           "query": "SELECT id, title, description, completed, created_at FROM todos WHERE user_id = $USER_ID"
+         },
+         {
+           "path": "/api/todos",
+           "method": "POST",
+           "description": "Creates a new todo item for the authenticated user.",
+           "query": "INSERT INTO todos (user_id, title, description, completed, created_at) VALUES ($USER_ID, $title, $description, $completed, NOW())"
+         },
+         {
+           "path": "/api/todos/[id]",
+           "method": "PUT",
+           "description": "Updates the details of a specific todo item.",
+           "query": "UPDATE todos SET title = $title, description = $description, completed = $completed WHERE id = $id AND user_id = $USER_ID"
+         },
+         {
+           "path": "/api/todos/[id]",
+           "method": "DELETE",
+           "description": "Deletes a specific todo item.",
+           "query": "DELETE FROM todos WHERE id = $id AND user_id = $USER_ID"
+         }
+       ],
+       "database": [
+         {
+           "name": "todos",
+           "sql_schema": "CREATE TABLE public.todos (id SERIAL PRIMARY KEY, user_id UUID REFERENCES auth.users (id) ON DELETE CASCADE, title VARCHAR(255) NOT NULL, description TEXT, completed BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW()); CREATE POLICY \"Enable RLS\" ON public.todos USING (auth.uid() = user_id);"
+         }
+       ]
+     }
+   }
+   ```
+
+### Phase 2: Building Your App
+
+During `berry code`, ByteMason:
+
+1. **Creates Components, APIs and pages**
+   ```tsx
+   // Example of a generated component
+   export function TodoList() {
+     const { data: todos } = useTodos()
+     
+     return (
+       <div className="space-y-4">
+         {todos.map(todo => (
+           <TodoItem key={todo.id} {...todo} />
+         ))}
+       </div>
+     )
+   }
+   ```
+
+2. **Sets Up the Database**
+   - Creates tables in Supabase
+   - Sets up authentication
+   - Adds security rules
+
+### Phase 3: Quality Check & Fixes
+
+The `berry repair` command:
+
+1. **Checks Everything**
+   - Builds the application
+   - Looks for any compile time errors
+   - Identifies missing pieces
+
+2. **Fixes Problems**
+   - Adds missing imports
+   - Installs needed packages
+   - Fixes type errors
+   - Fixes logical errors
+   - Ensures everything works together
+
+## Key Components
+
+### 1. Project Structure
+```
+your-app/
+├── app/                    # Next.js 14 App Router
+│   ├── page.tsx           # Home page
+│   ├── todos/             # Todo features
+│   └── api/               # API endpoints
+├── components/            # UI components
+├── lib/                   # Shared code
+│   ├── api/              # API functions
+└── public/               # Static files
+```
+
+### 2. Technology Stack
+
+- **Frontend**
+  - Next.js 14 with App Router
+  - Tailwind CSS for styling
+  - shadcn/ui for UI components
+
+- **Backend**
+  - Next.js API routes
+  - Supabase for database
+  - TypeScript for type safety
+
+### 3. Development Tools
+
+- **Code Generation**
+  - AI-powered code writing
+  - Modern best practices
+  - Clean code structure
+
+- **Database Management**
+  - Automatic migrations
+  - Type-safe queries
+  - Secure access patterns
+
+
+## Common Workflows
+
+1. **Starting a New Project**
+   ```bash
+   berry new my-app
+   cd my-app
+   berry plan "your description"
+   berry code ./spec/specification.json
+   ```
+
+2. **Generation database schemas and migrations**
+    ```bash
+    berry db setup ./spec/specification.json    # generate schemas and migrations
+    berry db push                               # push the migrations to DB
+    ```
+
+2. **Generate code**
+   berry code ./spec/specification.json
+   
+   # Fix any issues (runs automatically for the first time)
+   berry repair
+   ```
+
+3. **Run the app**
+   ```bash
+   npm i && npm run dev
+   ```

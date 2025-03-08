@@ -1,0 +1,146 @@
+# Introduction
+
+Turn your ideas into full stack applications with AI-powered code generation.
+
+## What is ByteMason?
+
+ByteMason is an intelligent development tool that transforms natural language descriptions into complete full stack web applications. It's designed for both beginners and experienced developers who want to:
+
+- Build full-stack Next.js applications quickly
+- Automate repetitive development tasks
+
+## Prerequisites
+
+- Python 3.10 or higher
+- Anthropic API key
+- OpenAI API key
+
+
+## Quick Start
+
+We will be launching bytemason on pip soon as a package, for now you can use the repo.
+
+```bash
+# Install ByteMason
+git clone https://github.com/lumiralabs/bytemason
+
+# Create a .env file in root
+ANTHROPIC_API_KEY=your_key
+OPENAI_API_KEY=your_key
+
+# Run this to download all the dependencies
+uv pip install -e .
+
+# Create and generate your app
+berry new <app-name>
+cd <app-name>
+berry plan <prompt>
+berry db setup ./spec/specification.json
+berry db push
+berry code ./spec/specification.json
+npm run dev
+```
+
+## How It Works
+
+ByteMason uses a three-phase approach:
+
+1. **Understanding and planning** - AI analyzes your requirements and generates detailed technical specifications.
+2. **Building** - Creates Database schemas, frontend nad backend of your application
+3. **Testing** - Tests and fixes all the compile time errors.
+
+## Core Features
+
+**AI-Powered Development**
+- Natural language to code conversion
+- Automatic error detection and fixing
+- Smart code generation and repair
+
+**Modern Stack**
+- Next.js 14 with App Router
+- Supabase as Database and Auth provider
+- TypeScript for type safety
+- shadcn/ui components
+
+**Developer Experience**
+- Clean, maintainable code
+- Automated testing setup
+- Type-safe database queries
+- Modern development patterns
+
+## Documentation Structure
+
+### Guides
+- [Building Your First App](documentation/guides/building-todo-app.mdx) - Step-by-step tutorial
+- [Database Management](documentation/guides/database-management.mdx) - Working with Supabase
+- [Local Development](documentation/guides/local-development.mdx) - Contributing to ByteMason
+
+### Reference
+- [AI architecture](documentation/core-concepts/ai-components.mdx) - How ByteMason AI works
+- [API Reference](documentation/api-reference/commands.mdx) - API documentation
+
+## Example Applications
+
+ByteMason can help you build:
+
+**Web Applications**
+- Todo apps
+- Admin dashboards
+- Booking systems
+
+**Features**
+- User authentication
+- Database CRUD operations
+- Responsive UI components
+- API integrations
+
+## Local Development
+
+Want to contribute or modify ByteMason? It's easy to get started:
+
+```bash
+# Clone and setup
+git clone https://github.com/lumiralabs/bytemason.git
+cd bytemason
+
+# Create virtual environment (Python 3.10 or higher)
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+
+# Install dependencies
+pip install -e .
+
+# Set environment variables
+cp .env.example .env
+# Add your API keys to .env
+```
+
+
+## Best Practices
+
+1. **Writing Effective Prompts**
+   ```bash
+   # Be specific about features
+   berry plan "Build a blog with categories, tags, 
+   comments, and email notifications for new posts"
+   ```
+
+2. **Working with Generated Code**
+   - Review generated files
+   - Make incremental changes
+   - Use version control
+
+3. **Database Management**
+   - Review migrations
+   - Test data relationships
+   - Validate security rules
+
+## Community and Support
+
+- [GitHub Repository](https://github.com/lumiralabs/bytemason)
+- [Documentation Issues](https://github.com/lumiralabs/bytemason/issues)
+
+## Contributing
+
+We welcome contributions! See our [Contributing Guide](documentation/guides/local-development#contributing-guidelines) to get started.
+

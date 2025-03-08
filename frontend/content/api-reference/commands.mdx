@@ -1,0 +1,58 @@
+# ByteMason CLI Reference
+
+Complete reference for all ByteMason CLI commands.
+
+## Core Commands
+
+### `berry new`
+
+Creates a new ByteMason project, it clones the boilerplate that have foundational logic setup.
+
+```bash
+berry new <project-name> 
+```
+
+### `berry plan`
+
+Generates a specification from your prompt.
+
+```bash
+berry plan <prompt>
+```
+
+## Database Commands
+
+### `berry db setup`
+
+Configures Supabase connection and generates migrations. This takes in your Supabase key credentials for migrations.
+
+```bash
+berry db setup <spec-path>
+```
+
+### `berry db push`
+
+Pushes generated migrations to Supabase.
+
+```bash
+berry db push 
+```
+
+
+### `berry code`
+
+Generates application code from specification.
+
+```bash
+berry code <spec-path> 
+```
+
+## Maintenance Commands
+
+### `berry repair`
+
+Fixes build errors automatically. This runs automatically after `berry code` but if the errors still persist it can be executed manually too.
+
+```bash
+berry repair 
+```

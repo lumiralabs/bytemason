@@ -1,0 +1,198 @@
+# Local Development Guide
+
+Learn how to set up ByteMason locally for development and understand its core components.
+
+## Quick Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/lumiralabs/bytemason.git
+cd bytemason
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+
+# Install dependencies
+pip install -e .
+
+# Set up environment variables
+cp .env.example .env
+```
+
+## Environment Setup
+
+ByteMason needs just two API keys to work:
+
+```env
+# .env
+ANTHROPIC_API_KEY=your_anthropic_key
+OPENAI_API_KEY=your_openai_key
+```
+
+These keys power the AI agents that generate and repair code.
+
+## Project Structure
+
+```
+bytemason/
+├── src/
+│   └── blueberry/          # Core package directory
+│       ├── agents.py       # AI agents implementation
+│       ├── cli.py          # Command-line interface
+│       ├── models.py       # Data models and types
+│       ├── repair_agent.py # Code repair system
+│       └── prompts/        # Core prompts for AI
+├── tests/                  # Test suite
+├── examples/               # Example applications
+└── pyproject.toml         # Project configuration
+```
+
+### Key Components
+
+1. **Agents (agents.py)**
+   ```python
+   class ProjectBuilder:
+       """Main orchestrator for project generation"""
+       
+   class CodeAgent:
+       """Handles code generation and modifications"""
+       
+   class SupabaseSetupAgent:
+       """Manages database setup and migrations"""
+   ```
+
+2. **CLI Interface (cli.py)**
+   ```python
+   @app.command()
+   def plan(prompt: str):
+       """Generates project specification from prompt"""
+   
+   @app.command()
+   def code(spec_path: str):
+       """Generates application code from specification"""
+   ```
+
+3. **Repair System (repair_agent.py)**
+   ```python
+   class RepairAgent:
+       """Automatically fixes build errors"""
+       def analyze_error(self, error: str) -> BuildErrorReport:
+           """Analyzes build errors and suggests fixes"""
+   ```
+
+## Core Prompts
+
+ByteMason uses carefully crafted prompts for different tasks. Here's a simplified overview:
+
+### 1. Specification Generation
+```python
+SPEC_PROMPT = """
+Given the following application description:
+{user_prompt}
+
+Create a detailed specification including:
+1. Required database tables and relationships
+2. API endpoints and their functionality
+3. UI components and their interactions
+4. Authentication and authorization rules
+"""
+```
+
+### 2. Code Generation
+```python
+CODE_PROMPT = """
+Generate a Next.js application based on this specification:
+{spec}
+
+Requirements:
+- Use Next.js 14 App Router
+- Implement Supabase authentication
+- Follow TypeScript best practices
+- Use shadcn/ui components
+"""
+```
+
+### 3. Error Repair
+```python
+REPAIR_PROMPT = """
+Given this build error:
+{error}
+
+And this code context:
+{context}
+
+Suggest fixes that:
+1. Resolve the immediate error
+2. Maintain code consistency
+3. Follow project patterns
+"""
+```
+
+## Generated Project Structure
+
+When you create a new project, ByteMason generates this structure:
+
+```
+your-app/
+├── app/                    # Next.js 14 App Router
+│   ├── page.tsx           # Home page
+│   ├── layout.tsx         # Root layout
+│   ├── auth/              # Authentication pages
+│   └── api/               # API routes
+├── components/
+│   ├── ui/               # shadcn/ui components
+│   └── features/         # Feature components
+├── lib/
+│   ├── utils.ts          # Utility functions
+│   ├── api/              # API functions
+├── public/               # Static assets
+└── types/                # TypeScript types
+```
+
+## Development Workflow
+
+1. **Making Changes**
+   ```bash
+   # Install in development mode
+   pip install -e .
+   
+   # Try your changes
+   berry new test
+   berry plan "Build a test app"
+   ```
+
+2. **Testing Prompts**
+   - Modify prompts in `src/blueberry/prompts/`
+   - Test with different app descriptions
+   - Check generated specifications
+
+
+## Contributing Guidelines
+
+1. **Code Style**
+   - Use type hints
+   - Add docstrings to functions
+
+3. **Documentation**
+   - Update relevant docs
+   - Add examples for new features
+   - Include type annotations
+
+
+## Troubleshooting Development
+
+1. **AI Response Issues**
+   - Check API keys
+   - Review prompt formatting
+   - Check response logs
+
+2. **Build Problems**
+   - Verify dependencies
+   - Review error patterns
+
+
+## Next Steps
+
+- Read the [Architecture Guide](/documentationcore-concepts/architecture)
+- Explore [AI Components](documentation/core-concepts/ai-components)

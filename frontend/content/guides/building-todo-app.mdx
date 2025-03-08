@@ -1,0 +1,67 @@
+# Building a Todo App with ByteMason
+
+This guide walks you through creating a full-stack todo application with authentication, categories, and due dates.
+
+## Project Setup
+
+```bash
+# Create new project
+berry new todo-app
+cd todo-app
+
+# Generate specification
+berry plan "Create a todo app with user authentication, categories, and due dates. Users should be able to create, update, delete todos and organize them by categories. Each todo should have a title, description, due date, category, and completion status."
+```
+
+## Understanding the Generated Specification
+
+The specification will include:
+
+1. **Database Schema**:
+   - Users table (handled by Supabase Auth)
+   - Todos table
+   - Categories table
+
+2. **API Endpoints**:
+   - CRUD operations for todos
+   - Category management
+   - User preferences
+
+3. **UI Components**:
+   - Authentication forms
+   - Todo creation/edit forms
+   - Category management
+   - Todo list with filters
+
+## Database Setup
+
+```bash
+# Configure Supabase
+berry db setup ./spec/specification.json
+
+# Push migrations
+berry db push
+```
+
+## Code Generation
+
+```bash
+# Generate application code
+berry code ./spec/specification.json
+```
+
+## Testing Your Application
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+## Common Issues and Solutions
+
+- **Build Errors**: Run `berry repair` to fix common issues
+- **Database Sync**: Use `berry db push` after schema changes
+- **UI Updates**: Modify shadcn components in `components/ui`

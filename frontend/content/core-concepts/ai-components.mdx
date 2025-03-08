@@ -1,0 +1,118 @@
+# Understanding ByteMason's AI
+
+ByteMason uses advanced AI to help you build applications. Let's understand how it works in simple terms.
+
+## The Three AI Agents
+
+ByteMason has three specialized AI agents working together to build your application:
+
+### 1. Understanding Agent
+
+This agent is like a skilled project manager who:
+- Reads your project description
+- Figures out what features you need
+- Plans how everything should work together
+
+For example, if you say:
+```bash
+berry plan "Build me a todo app with categories"
+```
+
+The Understanding Agent will identify:
+- You need a todo list feature
+- Todos should be organized in categories
+- Users should be able to create, edit, and delete todos
+- Each todo needs a title, description, and category
+
+### 2. Code Generation Agent
+
+Think of this agent as your expert developer who:
+- Creates the database structure
+- Writes React components
+- Sets up API endpoints
+- Implements authentication
+- Adds necessary UI components
+
+
+### 3. Repair Agent
+
+This is like having a debugging expert who:
+- Checks if the application builds correctly
+- Identifies any errors or issues
+- Fixes problems automatically
+- Ensures everything works together
+
+For example, if there's a missing import:
+```typescript
+// Before: Error - 'Button' is not defined
+export function TodoActions() {
+  return <Button>Add Todo</Button>
+}
+
+// After: Fixed automatically
+import { Button } from "@/components/ui/button"
+export function TodoActions() {
+  return <Button>Add Todo</Button>
+}
+```
+
+## How They Work Together
+
+1. **Planning Phase**
+   - You describe what you want to build
+   - Understanding Agent creates a detailed plan
+   - You can review and adjust the plan
+
+2. **Building Phase**
+   - Code Generation Agent creates the application
+   - Files are organized in a clean structure
+   - UI components are added automatically
+
+3. **Quality Check**
+   - Repair Agent checks for compile time issues
+   - Problems are fixed automatically
+   - Application is ready to run
+
+## Best Practices
+
+To get the best results:
+
+1. **Be Specific**
+   ```bash
+   # Less specific
+   berry plan "Build me a todo app"
+   
+   # More specific
+   berry plan "Build a todo app where users can create lists,
+   add items with due dates, and share lists with other users"
+   ```
+
+2. **Review Generated Code**
+   - Check the `app` directory for API routes and pages
+   - Look at `components` for UI elements and logical components
+
+3. **Customize Gradually**
+   - Start with the generated code
+   - Make small changes to match your needs
+   - Use the repair command if needed:
+     ```bash
+     berry repair
+     ```
+
+## Understanding the Output
+
+ByteMason generates a modern Next.js application with:
+
+```
+your-app/
+├── app/                 # Next.js App Router pages
+├── components/         # Reusable UI components
+├── lib/               # Utilities and API functions
+└── public/            # Static assets
+```
+
+Each part is:
+- Type-safe with TypeScript
+- Styled with Tailwind CSS
+- Connected to your Supabase database
+- Ready for deployment

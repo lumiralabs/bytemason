@@ -1,0 +1,111 @@
+# Managing Your Database with ByteMason
+
+Learn how ByteMason helps you manage your Supabase database without writing complex SQL or dealing with migrations manually.
+
+## Understanding Database Management
+
+ByteMason handles your database in three main ways:
+1. Creates tables and relationships automatically
+2. Manages changes through migrations
+3. Provides type-safe database access
+
+## Setting Up Your Database
+
+### 1. Initial Setup
+
+First, you'll need a Supabase project. Get these from your Supabase dashboard:
+- Project URL
+- Anon Key
+- Service Role Key
+
+Then run:
+```bash
+berry db setup ./spec/specification.json
+```
+
+This will:
+- Connect to your Supabase project
+- Create necessary tables
+- Set up authentication
+- Configure security policies
+
+### 2. Database Structure
+
+ByteMason creates a clean database structure. For example, a todo app might have:
+
+```sql
+-- Users (handled by Supabase Auth)
+auth.users
+  - id
+  - email
+  - created_at
+
+-- Todos
+create table todos (
+  id uuid primary key default uuid_generate_v4(),
+  title text not null,
+  description text,
+  completed boolean default false,
+  user_id uuid references auth.users(id),
+  created_at timestamp with time zone default now()
+);
+
+-- Categories
+create table categories (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  user_id uuid references auth.users(id)
+);
+```
+
+### 3. Security Rules
+
+ByteMason automatically sets up Row Level Security (RLS):
+
+```sql
+-- Users can only see their own todos
+create policy "Users can view own todos"
+  on todos for select
+  using (auth.uid() = user_id);
+
+-- Users can only modify their own todos
+create policy "Users can modify own todos"
+  on todos for all
+  using (auth.uid() = user_id);
+```
+
+## Working with Data
+
+### 1. Type-Safe Queries
+
+ByteMason generates type-safe database functions:
+
+```typescript
+// Generated type-safe function
+export async function getTodos() {
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .order('created_at', { ascending: false })
+  
+  if (error) throw error
+  return data
+}
+
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Migration Failed**
+   - Check Supabase connection
+   - Verify credentials
+   - Review error messages
+
+2. **Permission Issues**
+   - Check service role key permissions
+   - Review RLS policies
+   - Verify user roles
+
+NOTE: If you have issues logging into supabase from cli then just copu paste the migrations file inside `<your-app>/supabase/migrations` into the sql editor of your supabase project and setup will be completed.
