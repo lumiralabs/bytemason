@@ -434,6 +434,50 @@ class CodeAgent:
                 f.write(str(response))
             f.write(f"\n{'=' * 80}\n")
 
+    async def _retry_ai_call(self, call_func, params, max_retries=3, base_delay=2):
+        """
+        Retry AI API calls with exponential backoff when encountering overload errors.
+        
+        Args:
+            call_func: The lumos.call_ai_async or similar function
+            params: Dictionary of parameters to pass to the function
+            max_retries: Maximum number of retry attempts
+            base_delay: Base delay in seconds (will be exponentially increased)
+            
+        Returns:
+            The response from the AI call
+        """
+        retries = 0
+        last_error = None
+        
+        while retries <= max_retries:
+            try:
+                return await call_func(**params)
+                
+            except Exception as e:
+                error_str = str(e).lower()
+                
+                # Check if it's an overload error (529)
+                if "529" in error_str and "overloaded" in error_str:
+                    retries += 1
+                    if retries > max_retries:
+                        self.console.print(f"[red]Maximum retries ({max_retries}) exceeded for API call[/red]")
+                        raise e
+                    
+                    # Calculate delay with exponential backoff
+                    delay = base_delay * (2 ** (retries - 1))
+                    self.console.print(f"[yellow]Anthropic API overloaded. Retrying in {delay}s (Attempt {retries}/{max_retries})[/yellow]")
+                    await asyncio.sleep(delay)
+                    
+                else:
+                    # Not a 529 error, re-raise immediately
+                    raise e
+                
+                last_error = e
+        
+        # If we exhausted retries
+        raise last_error
+
     async def transform_template(self) -> bool:
         """Transform the boilerplate into the specified application"""
         with Progress(
@@ -642,13 +686,16 @@ class CodeAgent:
             """
             
             
-            response = await lumos.call_ai_async(
-                messages=[
-                    {"role": "system", "content": "You are a Next.js 14 Route Handler specialist focusing on type-safety and security."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format=GeneratedCode,
-                model="anthropic/claude-3-5-sonnet-20241022"
+            response = await self._retry_ai_call(
+                lumos.call_ai_async,
+                {
+                    "messages": [
+                        {"role": "system", "content": "You are a Next.js 14 Route Handler specialist focusing on type-safety and security."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "response_format": GeneratedCode,
+                    "model": "anthropic/claude-3-5-sonnet-20241022"
+                }
             )
             
             # Add validation logging
@@ -783,13 +830,16 @@ class CodeAgent:
             """
         
             
-            response = await lumos.call_ai_async(
-                messages=[
-                    {"role": "system", "content": "You are a Next.js 14 Component architect specializing in Server and Client Components."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format=GeneratedCode,
-                model="anthropic/claude-3-5-sonnet-20241022"
+            response = await self._retry_ai_call(
+                lumos.call_ai_async,
+                {
+                    "messages": [
+                        {"role": "system", "content": "You are a Next.js 14 Component architect specializing in Server and Client Components."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "response_format": GeneratedCode,
+                    "model": "anthropic/claude-3-5-sonnet-20241022"
+                }
             )
             
             # Add validation logging
@@ -888,13 +938,16 @@ class CodeAgent:
             
 
             
-            response = await lumos.call_ai_async(
-                messages=[
-                    {"role": "system", "content": "You are a Next.js 14 App Router specialist focusing on proper page structure and data flow."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format=GeneratedCode,
-                model="anthropic/claude-3-5-sonnet-20241022"
+            response = await self._retry_ai_call(
+                lumos.call_ai_async,
+                {
+                    "messages": [
+                        {"role": "system", "content": "You are a Next.js 14 App Router specialist focusing on proper page structure and data flow."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "response_format": GeneratedCode,
+                    "model": "anthropic/claude-3-5-sonnet-20241022"
+                }
             )
             
             # Add validation logging
@@ -1015,16 +1068,19 @@ class CodeAgent:
             Build Output:
             {build_output}"""
 
-            response = await lumos.call_ai_async(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at analyzing Next.js and TypeScript build errors.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                model="anthropic/claude-3-5-sonnet-20241022",
-                response_format=BuildErrorReport,
+            response = await self._retry_ai_call(
+                lumos.call_ai_async,
+                {
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are an expert at analyzing Next.js and TypeScript build errors.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    "model": "anthropic/claude-3-5-sonnet-20241022",
+                    "response_format": BuildErrorReport,
+                }
             )
 
             # Log the AI prompt and response
