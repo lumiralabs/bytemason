@@ -5,6 +5,7 @@ Learn how ByteMason helps you manage your Supabase database without writing comp
 ## Understanding Database Management
 
 ByteMason handles your database in three main ways:
+
 1. Creates tables and relationships automatically
 2. Manages changes through migrations
 3. Provides type-safe database access
@@ -14,16 +15,19 @@ ByteMason handles your database in three main ways:
 ### 1. Initial Setup
 
 First, you'll need a Supabase project. Get these from your Supabase dashboard:
+
 - Project URL
 - Anon Key
 - Service Role Key
 
 Then run:
+
 ```bash
-berry db setup ./spec/specification.json
+mason db setup ./spec/specification.json
 ```
 
 This will:
+
 - Connect to your Supabase project
 - Create necessary tables
 - Set up authentication
@@ -84,14 +88,13 @@ ByteMason generates type-safe database functions:
 // Generated type-safe function
 export async function getTodos() {
   const { data, error } = await supabase
-    .from('todos')
-    .select('*')
-    .order('created_at', { ascending: false })
-  
-  if (error) throw error
-  return data
-}
+    .from("todos")
+    .select("*")
+    .order("created_at", { ascending: false });
 
+  if (error) throw error;
+  return data;
+}
 ```
 
 ## Troubleshooting
@@ -99,6 +102,7 @@ export async function getTodos() {
 ### Common Issues
 
 1. **Migration Failed**
+
    - Check Supabase connection
    - Verify credentials
    - Review error messages

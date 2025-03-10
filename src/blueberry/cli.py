@@ -74,12 +74,12 @@ def format_message(msg_type: str, message: str, use_color: bool = True) -> str:
 
 
 app = typer.Typer(
-    name="berry",
+    name="mason",
     help="""
-🚀 Blueberry CLI - AI-powered Next.js App Generator
+🚀 Bytemason CLI - AI-powered Next.js App Generator
 
 Generate production-ready Next.js applications with AI assistance.
-Blueberry helps you plan, build, and deploy full-stack apps from natural language descriptions.
+Bytemason helps you plan, build, and deploy full-stack apps from natural language descriptions.
 
 Features:
 • Next.js 14 with App Router
@@ -245,7 +245,7 @@ def create(
     Generate a Next.js application from a natural language description.
 
     Your description should include the core functionality and features you want.
-    Blueberry will analyze your requirements and generate a complete application.
+    Bytemason will analyze your requirements and generate a complete application.
 
     Features:
     • Next.js 14 frontend with modern UI
@@ -254,9 +254,9 @@ def create(
     • Production deployment config
 
     Examples:
-        $ berry create "Todo list app with user authentication"
-        $ berry create "Blog with markdown and comments"
-        $ berry create "Chat app with real-time messages"
+        $ mason create "Todo list app with user authentication"
+        $ mason create "Blog with markdown and comments"
+        $ mason create "Chat app with real-time messages"
     """
     if no_color:
         console.force_terminal = False
@@ -270,7 +270,7 @@ def create(
         try:
             from importlib.metadata import version as get_version
             v = get_version("blueberry")
-            console.print(f"Blueberry v{v}")
+            console.print(f"Bytemason v{v}")
         except:
             console.print("Version information not available")
         raise typer.Exit()
@@ -281,9 +281,9 @@ def create(
         )
         if not quiet:
             console.print("\nExample:")
-            console.print('  berry create "Todo list app with authentication"')
+            console.print('  mason create "Todo list app with authentication"')
             console.print("\nFor more help:")
-            console.print("  berry create --help")
+            console.print("  mason create --help")
         raise typer.Exit(1)
 
     try:
@@ -295,7 +295,7 @@ def create(
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
         if not quiet:
             console.print("\nFor help:")
-            console.print("  berry create --help")
+            console.print("  mason create --help")
         raise typer.Exit(1)
 
 
@@ -451,7 +451,7 @@ def get_project_status():
 @app.command()
 def status():
     """
-    Show the current state of the Blueberry workspace
+    Show the current state of the Bytemason workspace
 
     This includes:
     - Available project specifications
@@ -483,7 +483,7 @@ def status():
             )
         )
         console.print("To create one, run:")
-        console.print('  berry create "describe your app"')
+        console.print('  mason create "describe your app"')
 
     # Generated Projects
     console.print(format_message("info", "🚀 Generated Projects"))
@@ -515,11 +515,11 @@ def status():
 
     if not status["specs"]:
         actions.add("Generate a new project specification:")
-        actions.add('  berry create "describe your app"')
+        actions.add('  mason create "describe your app"')
     elif not status["projects"]:
         actions.add("Generate a project from existing specification:")
         for spec in status["specs"]:
-            actions.add(f'  berry create "Use specification from {spec["file"]}"')
+            actions.add(f'  mason create "Use specification from {spec["file"]}"')
     else:
         for project in status["projects"]:
             project_actions = actions.add(f"[cyan]{project['name']}[/cyan]")
@@ -562,13 +562,13 @@ def plan(
     • Authentication setup
 
     The plan can be used to:
-    1. Generate code (berry generate)
-    2. Create database schema (berry db generate)
+    1. Generate code (mason generate)
+    2. Create database schema (mason db generate)
     3. Track project evolution
 
     Examples:
-        $ berry plan "Todo list with user authentication"
-        $ berry plan "Blog with comments" -o blog_spec.json
+        $ mason plan "Todo list with user authentication"
+        $ mason plan "Blog with comments" -o blog_spec.json
     """
     try:
         builder = ProjectBuilder()
@@ -612,9 +612,9 @@ def plan(
         if not quiet:
             console.print("\n" + format_message("info", "Next steps:"))
             console.print("  1. Review the specification")
-            console.print(f"  2. berry db setup {spec_file} # Configure database and generate schema")
-            console.print(f"  3. berry db push {spec_file}  # Apply schema to database")
-            console.print(f"  4. berry code {spec_file}  # Generate code")
+            console.print(f"  2. mason db setup {spec_file} # Configure database and generate schema")
+            console.print(f"  3. mason db push {spec_file}  # Apply schema to database")
+            console.print(f"  4. mason code {spec_file}  # Generate code")
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Error: {str(e)}"))
         raise typer.Exit(1)
@@ -684,8 +684,8 @@ def setup(
     4. Generate database schema (if spec file provided)
 
     Examples:
-        $ berry db setup                          # Basic setup
-        $ berry db setup specs/myapp_spec.json    # Setup + schema generation
+        $ mason db setup                          # Basic setup
+        $ mason db setup specs/myapp_spec.json    # Setup + schema generation
     """
     try:
         # Extract project ref from URL
@@ -749,13 +749,13 @@ def setup(
             
                 console.print(format_message("success", "Database setup complete!"))
                 console.print("\n" + format_message("info", "Next step:"))
-                console.print("  berry db push  # Apply schema to database")
+                console.print("  mason db push  # Apply schema to database")
         else:
             if not quiet:
                 console.print("\n" + format_message("info", "Next steps:"))
-                console.print("  1. berry plan \"Your app description\"  # Plan your app")
-                console.print("  2. berry db setup specs/yourapp_spec.json  # Generate schema")
-                console.print("  3. berry db push  # Apply schema to database")
+                console.print("  1. mason plan \"Your app description\"  # Plan your app")
+                console.print("  2. mason db setup specs/yourapp_spec.json  # Generate schema")
+                console.print("  3. mason db push  # Apply schema to database")
 
     except Exception as e:
         error_console.print("\n" + format_message("error", f"Setup failed: {str(e)}"))
@@ -797,10 +797,10 @@ def setup(
 #     supabase/migrations/
 
 #     Examples:
-#         $ berry db generate specs/myapp_spec.json
-#         $ berry db generate specs/myapp_spec.json -o initial.sql
+#         $ mason db generate specs/myapp_spec.json
+#         $ mason db generate specs/myapp_spec.json -o initial.sql
 #     """
-#     console.print(format_message("warning", "This command is deprecated. Use 'berry db setup' instead."))
+#     console.print(format_message("warning", "This command is deprecated. Use 'mason db setup' instead."))
 #     try:
 #         # Load and validate spec
 #         with open(spec_file) as f:
@@ -835,7 +835,7 @@ def setup(
 
 #         if not quiet:
 #             console.print("\n" + format_message("info", "Next step:"))
-#             console.print("  berry db push  # Apply schema to database")
+#             console.print("  mason db push  # Apply schema to database")
 
 #     except Exception as e:
 #         error_console.print(
@@ -877,23 +877,23 @@ def push(
     supabase/migrations/
 
     Examples:
-        $ berry db push
-        $ berry db push --dry-run  # Preview changes
-        $ berry db push --force    # Skip confirmation
+        $ mason db push
+        $ mason db push --dry-run  # Preview changes
+        $ mason db push --force    # Skip confirmation
     """
     try:
         # Check for environment variables
         env_file = Path(".env.local")
         if not env_file.exists():
             raise Exception(
-                "Environment not configured. Run 'berry db setup' first"
+                "Environment not configured. Run 'mason db setup' first"
             )
 
         # Check for migrations
         migrations_dir = Path("supabase/migrations")
         if not migrations_dir.exists() or not any(migrations_dir.glob("*.sql")):
             raise Exception(
-                "No migrations found. Run 'berry db generate' first"
+                "No migrations found. Run 'mason db generate' first"
             )
 
         # Add --dry-run flag if requested
@@ -950,8 +950,8 @@ def code(
     Existing node_modules are preserved.
 
     Examples:
-        $ berry code specs/myapp_spec.json
-        $ berry code path/to/spec.json --quiet
+        $ mason code specs/myapp_spec.json
+        $ mason code path/to/spec.json --quiet
     """
     try:
         # Load and validate spec
@@ -984,7 +984,7 @@ def code(
         if not quiet:
             console.print("\n" + format_message("info", "Next steps:"))
             console.print("  1. npm install")
-            console.print("  2. berry db setup")
+            console.print("  2. mason db setup")
             console.print("  3. npm run dev")
 
     except Exception as e:
@@ -1021,8 +1021,8 @@ def new(
     • Development environment
 
     Examples:
-        $ berry new my-app
-        $ berry new my-blog --template blog
+        $ mason new my-app
+        $ mason new my-blog --template blog
     """
     try:
         # Validate name
@@ -1093,8 +1093,8 @@ def new(
             console.print("\n" + format_message("info", "Next steps:"))
             console.print(f"  1. cd {project_name}")
             console.print("  2. npm install")
-            console.print('  3. berry plan "Your app description"  # Plan your app')
-            console.print("  4. berry db setup  # Configure database")
+            console.print('  3. mason plan "Your app description"  # Plan your app')
+            console.print("  4. mason db setup  # Configure database")
             console.print("  5. npm run dev  # Start development")
 
     except Exception as e:
@@ -1127,8 +1127,8 @@ def repair(
     Can work with or without a specification file.
 
     Examples:
-        $ berry repair
-        $ berry repair --spec specs/myapp_spec.json
+        $ mason repair
+        $ mason repair --spec specs/myapp_spec.json
     """
     try:
         # Load spec if provided
@@ -1178,7 +1178,7 @@ def repair(
             if not quiet:
                 console.print("\nTry:")
                 console.print("  1. Manual code review")
-                console.print("  2. Run 'berry repair' again")
+                console.print("  2. Run 'mason repair' again")
         else:
             console.print(format_message("success", "All errors fixed!"))
 
@@ -1186,7 +1186,7 @@ def repair(
         error_console.print(format_message("error", f"Repair failed: {str(e)}"))
         if not quiet:
             console.print("\nFor help:")
-            console.print("  berry repair --help")
+            console.print("  mason repair --help")
         raise typer.Exit(1)
 
 

@@ -6,11 +6,11 @@ This guide walks you through creating a full-stack todo application with authent
 
 ```bash
 # Create new project
-berry new todo-app
+mason new todo-app
 cd todo-app
 
 # Generate specification
-berry plan "Create a todo app with user authentication, categories, and due dates. Users should be able to create, update, delete todos and organize them by categories. Each todo should have a title, description, due date, category, and completion status."
+mason plan "Create a todo app with user authentication, categories, and due dates. Users should be able to create, update, delete todos and organize them by categories. Each todo should have a title, description, due date, category, and completion status."
 ```
 
 ## Understanding the Generated Specification
@@ -18,11 +18,13 @@ berry plan "Create a todo app with user authentication, categories, and due date
 The specification will include:
 
 1. **Database Schema**:
+
    - Users table (handled by Supabase Auth)
    - Todos table
    - Categories table
 
 2. **API Endpoints**:
+
    - CRUD operations for todos
    - Category management
    - User preferences
@@ -37,17 +39,17 @@ The specification will include:
 
 ```bash
 # Configure Supabase
-berry db setup ./spec/specification.json
+mason db setup ./spec/specification.json
 
 # Push migrations
-berry db push
+mason db push
 ```
 
 ## Code Generation
 
 ```bash
 # Generate application code
-berry code ./spec/specification.json
+mason code ./spec/specification.json
 ```
 
 ## Testing Your Application
@@ -62,6 +64,6 @@ npm run dev
 
 ## Common Issues and Solutions
 
-- **Build Errors**: Run `berry repair` to fix common issues
-- **Database Sync**: Use `berry db push` after schema changes
+- **Build Errors**: Run `mason repair` to fix common issues
+- **Database Sync**: Use `mason db push` after schema changes
 - **UI Updates**: Modify shadcn components in `components/ui`

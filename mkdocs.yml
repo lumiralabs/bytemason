@@ -1,5 +1,5 @@
 # Site information
-site_name: Blueberry
+site_name: Bytemason
 site_author: Arun Patro
 site_url: https://lumiralabs.github.io/blueberry
 site_description: AI agent library for building AI apps
@@ -21,8 +21,8 @@ theme:
     code: Source Code Pro
   palette:
     # scheme: slate
-    primary: 'black'
-    accent: 'indigo'
+    primary: "black"
+    accent: "indigo"
   features:
     - content.code.copy
     - navigation.expand

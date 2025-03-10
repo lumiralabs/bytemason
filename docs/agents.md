@@ -1,10 +1,11 @@
 ---
-Title: Available Blueberry Agents
+Title: Available Bytemason Agents
 ---
 
 We have the following agents:
 
 1. Master Agent
+
 - understand intent
 - creates spec
 
@@ -20,4 +21,4 @@ final_intent = master_agent.verify_with_user_loop(intent, max_attempts=3)
 spec = master_agent.create_spec(final_intent)
 ```
 
-2. 
+2.
