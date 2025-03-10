@@ -17,5 +17,5 @@ uv pip install -e .
 To use the blueberry CLI tool:
 
 ```bash
-berry --code "your prompt here"
+mason --code "your prompt here"
 ```

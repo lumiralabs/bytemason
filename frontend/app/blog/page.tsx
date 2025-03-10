@@ -111,13 +111,13 @@ export default function BlogPost() {
             ByteMason is driven by a simple command sequence. You start by creating a project folder:
           </p>
           <div className="bg-white/[0.03] p-4 rounded-lg my-4 border border-white/[0.05]">
-            <code className="text-green-300/90">berry new Project-Name</code>
+            <code className="text-green-300/90">mason new Project-Name</code>
           </div>
           <p className="text-white/70 leading-relaxed mt-4">
             Then you provide a prompt that describes what you want to build:
           </p>
           <div className="bg-white/[0.03] p-4 rounded-lg my-4 border border-white/[0.05]">
-            <code className="text-green-300/90">berry plan "PROMPT"</code>
+            <code className="text-green-300/90">mason plan "PROMPT"</code>
           </div>
           <p className="text-white/70 leading-relaxed">
             When you run this command, we process your request and show you exactly how it works behind the scenes.
@@ -177,10 +177,10 @@ export default function BlogPost() {
             Setting Up Your Database
           </h2>
           <div className="bg-white/[0.03] p-4 rounded-lg my-4 border border-white/[0.05]">
-            <code className="text-green-300/90">berry db setup spec_path // to setup supabase keys and generate migrations</code>
+            <code className="text-green-300/90">mason db setup spec_path // to setup supabase keys and generate migrations</code>
           </div>
           <div className="bg-white/[0.03] p-4 rounded-lg my-4 border border-white/[0.05]">
-            <code className="text-green-300/90">berry db push // to push migrations to remote supabase project</code>
+            <code className="text-green-300/90">mason db push // to push migrations to remote supabase project</code>
           </div>
           <p className="text-white/70 leading-relaxed mt-4">
             Here, the SupabaseSetupAgent:
@@ -201,7 +201,7 @@ export default function BlogPost() {
             Building Your Code Layer by Layer
           </h2>
           <div className="bg-white/[0.03] p-4 rounded-lg my-4 border border-white/[0.05]">
-            <code className="text-green-300/90">berry code spec_path</code>
+            <code className="text-green-300/90">mason code spec_path</code>
           </div>
           <p className="text-white/70 leading-relaxed">
             This is where things happen. Our CodeAgent generates code in a context-aware sequence:
@@ -248,7 +248,7 @@ export default function BlogPost() {
             Automatic Repair Agent
           </h2>
           <div className="bg-white/[0.03] p-4 rounded-lg my-4 border border-white/[0.05]">
-            <code className="text-green-300/90">berry repair</code>
+            <code className="text-green-300/90">mason repair</code>
           </div>
           <p className="text-white/70 leading-relaxed">
             When you run this, ByteMason:

@@ -8,7 +8,7 @@ When you use ByteMason, your idea goes through three main phases:
 
 ### Phase 1: Understanding & Planning
 
-When you run `berry new`, it clones the boilerplate that contains foundational logic.
+When you run `mason new`, it clones the boilerplate that contains foundational logic.
 
 1. **Sets Up the Project**
    ```bash
@@ -18,9 +18,10 @@ When you run `berry new`, it clones the boilerplate that contains foundational l
    ├── lib/             # Helper functions
    ```
 
-When you run `berry plan`, ByteMason:
+When you run `mason plan`, ByteMason:
 
 1. **Reads Your Description**
+
    - Takes your natural language description
    - Understands what features you need
    - Plans the application structure
@@ -33,7 +34,7 @@ When you run `berry plan`, ByteMason:
      "description": "A web application for managing personal todo lists, leveraging Supabase for backend tasks such as authentication, authorization, and real-time data synchronization, and Next.js 14 for building front-end interfaces.",
      "features": [
        "User Authentication: Implement secure user signup, login, and logout using Supabase's auth capabilities.",
-       "Password Management: Ensure password policies are enforced and allow for password reset functionality.", 
+       "Password Management: Ensure password policies are enforced and allow for password reset functionality.",
        "Todo Management: Allow users to create, read, update, and delete (CRUD) todo items.",
        "User-specific Todo Lists: Ensure each user can only see their own list of todos.",
        "Data Modeling: Create a 'Todos' table with fields such as id, user_id (foreign key), title, description, completed (boolean), and created_at (timestamp).",
@@ -48,12 +49,10 @@ When you run `berry plan`, ByteMason:
          {
            "path": "/dashboard",
            "description": "Main interface for users to view and manage their todo lists.",
-           "api_routes": [
-             "/api/todos"
-           ],
+           "api_routes": ["/api/todos"],
            "components": [
              "DashboardLayout",
-             "TodoList", 
+             "TodoList",
              "AddTodoForm",
              "EditTodoModal"
            ]
@@ -71,14 +70,8 @@ When you run `berry plan`, ByteMason:
          {
            "path": "/todos",
            "description": "Displays the list of todos for the authenticated user and allows management actions.",
-           "api_routes": [
-             "/api/todos"
-           ],
-           "components": [
-             "TodoList",
-             "AddTodoForm",
-             "EditTodoModal"
-           ]
+           "api_routes": ["/api/todos"],
+           "components": ["TodoList", "AddTodoForm", "EditTodoModal"]
          }
        ],
        "components": [
@@ -156,21 +149,22 @@ When you run `berry plan`, ByteMason:
 
 ### Phase 2: Building Your App
 
-During `berry code`, ByteMason:
+During `mason code`, ByteMason:
 
 1. **Creates Components, APIs and pages**
+
    ```tsx
    // Example of a generated component
    export function TodoList() {
-     const { data: todos } = useTodos()
-     
+     const { data: todos } = useTodos();
+
      return (
        <div className="space-y-4">
-         {todos.map(todo => (
+         {todos.map((todo) => (
            <TodoItem key={todo.id} {...todo} />
          ))}
        </div>
-     )
+     );
    }
    ```
 
@@ -181,9 +175,10 @@ During `berry code`, ByteMason:
 
 ### Phase 3: Quality Check & Fixes
 
-The `berry repair` command:
+The `mason repair` command:
 
 1. **Checks Everything**
+
    - Builds the application
    - Looks for any compile time errors
    - Identifies missing pieces
@@ -198,6 +193,7 @@ The `berry repair` command:
 ## Key Components
 
 ### 1. Project Structure
+
 ```
 your-app/
 ├── app/                    # Next.js 14 App Router
@@ -213,6 +209,7 @@ your-app/
 ### 2. Technology Stack
 
 - **Frontend**
+
   - Next.js 14 with App Router
   - Tailwind CSS for styling
   - shadcn/ui for UI components
@@ -225,6 +222,7 @@ your-app/
 ### 3. Development Tools
 
 - **Code Generation**
+
   - AI-powered code writing
   - Modern best practices
   - Clean code structure
@@ -234,31 +232,36 @@ your-app/
   - Type-safe queries
   - Secure access patterns
 
-
 ## Common Workflows
 
 1. **Starting a New Project**
+
    ```bash
-   berry new my-app
+   mason new my-app
    cd my-app
-   berry plan "your description"
-   berry code ./spec/specification.json
+   mason plan "your description"
+   mason code ./spec/specification.json
    ```
 
 2. **Generation database schemas and migrations**
-    ```bash
-    berry db setup ./spec/specification.json    # generate schemas and migrations
-    berry db push                               # push the migrations to DB
-    ```
 
-2. **Generate code**
-   berry code ./spec/specification.json
-   
-   # Fix any issues (runs automatically for the first time)
-   berry repair
+   ```bash
+   mason db setup ./spec/specification.json    # generate schemas and migrations
+   mason db push                               # push the migrations to DB
    ```
 
-3. **Run the app**
+3. **Generate code**
+   mason code ./spec/specification.json
+
+   # Fix any issues (runs automatically for the first time)
+
+   mason repair
+
+   ```
+
+   ```
+
+4. **Run the app**
    ```bash
    npm i && npm run dev
    ```

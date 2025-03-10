@@ -21,7 +21,7 @@ readme = "README.md"
 license = {text = "MIT"}
 
 [project.scripts]
-berry = "blueberry.cli:run"
+mason = "blueberry.cli:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]

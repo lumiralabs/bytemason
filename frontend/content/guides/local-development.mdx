@@ -51,23 +51,25 @@ bytemason/
 ### Key Components
 
 1. **Agents (agents.py)**
+
    ```python
    class ProjectBuilder:
        """Main orchestrator for project generation"""
-       
+
    class CodeAgent:
        """Handles code generation and modifications"""
-       
+
    class SupabaseSetupAgent:
        """Manages database setup and migrations"""
    ```
 
 2. **CLI Interface (cli.py)**
+
    ```python
    @app.command()
    def plan(prompt: str):
        """Generates project specification from prompt"""
-   
+
    @app.command()
    def code(spec_path: str):
        """Generates application code from specification"""
@@ -86,6 +88,7 @@ bytemason/
 ByteMason uses carefully crafted prompts for different tasks. Here's a simplified overview:
 
 ### 1. Specification Generation
+
 ```python
 SPEC_PROMPT = """
 Given the following application description:
@@ -100,6 +103,7 @@ Create a detailed specification including:
 ```
 
 ### 2. Code Generation
+
 ```python
 CODE_PROMPT = """
 Generate a Next.js application based on this specification:
@@ -114,6 +118,7 @@ Requirements:
 ```
 
 ### 3. Error Repair
+
 ```python
 REPAIR_PROMPT = """
 Given this build error:
@@ -153,13 +158,14 @@ your-app/
 ## Development Workflow
 
 1. **Making Changes**
+
    ```bash
    # Install in development mode
    pip install -e .
-   
+
    # Try your changes
-   berry new test
-   berry plan "Build a test app"
+   mason new test
+   mason plan "Build a test app"
    ```
 
 2. **Testing Prompts**
@@ -167,22 +173,22 @@ your-app/
    - Test with different app descriptions
    - Check generated specifications
 
-
 ## Contributing Guidelines
 
 1. **Code Style**
+
    - Use type hints
    - Add docstrings to functions
 
-3. **Documentation**
+2. **Documentation**
    - Update relevant docs
    - Add examples for new features
    - Include type annotations
 
-
 ## Troubleshooting Development
 
 1. **AI Response Issues**
+
    - Check API keys
    - Review prompt formatting
    - Check response logs
@@ -190,7 +196,6 @@ your-app/
 2. **Build Problems**
    - Verify dependencies
    - Review error patterns
-
 
 ## Next Steps
 

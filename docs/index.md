@@ -1,9 +1,9 @@
 # blueberry
 
-Project Blueberry is a tool that helps you build full-stack apps with AI. It helps you plan, build, test and deploy your app. Product Building has never been so easy!
-
+Project Bytemason is a tool that helps you build full-stack apps with AI. It helps you plan, build, test and deploy your app. Product Building has never been so easy!
 
 ## Install
+
 ```
 pip install git+https://github.com/lumiralabs/blueberry
 ```
@@ -11,11 +11,13 @@ pip install git+https://github.com/lumiralabs/blueberry
 ## Usage
 
 ### Create a new project
+
 ```
 blueberry init <name> <description>
 ```
 
 creates a folder structure with:
+
 ```
 <name>
 ├── frontend/
@@ -27,10 +29,10 @@ creates a folder structure with:
 ```
 
 Examples:
+
 ```
 blueberry init todo_list_app "A todo list app"
 ```
-
 
 ```
 # ....
@@ -58,7 +60,6 @@ blueberry init todo_list_app "A todo list app"
 [deployed] here's your deployment: https://todo-list-app.vercel.app
 ```
 
-
 ### Modify an existing project
 
 ```
@@ -68,7 +69,6 @@ blueberry modify <name> <change_description>
 ```
 blueberry modify todo_list_app "Add a new feature to the app"
 ```
-
 
 Ambitious Examples:
 
