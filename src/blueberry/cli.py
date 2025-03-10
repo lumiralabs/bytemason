@@ -582,11 +582,6 @@ def plan(
             intent = builder.understand_intent(prompt)
             progress.update(task, completed=True)
 
-        # Display features
-        # if not quiet:
-        #     console.print("\n" + format_message("info", "Planned features:"))
-        #     display_features(intent.features)
-
         # Generate specification
         with create_progress() as progress:
             task = progress.add_task("🔨 Generating specification...")
@@ -605,9 +600,12 @@ def plan(
 
         spec_file = specs_dir / output
         
-        # Save specification
+        # Save specification with user prompt
+        spec_data = spec.dict()
+        spec_data["user_prompt"] = prompt  # Store the original user prompt
+        
         with open(spec_file, "w") as f:
-            json.dump(spec.dict(), f, indent=2)
+            json.dump(spec_data, f, indent=2)
 
         console.print("\n" + format_message("success", f"Specification saved: {spec_file}"))
 

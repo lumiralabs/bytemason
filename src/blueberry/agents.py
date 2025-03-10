@@ -43,7 +43,7 @@ class ProjectBuilder:
             f.write(f"\n{'=' * 80}\n")
             f.write(f"Timestamp: {timestamp}\n")
             f.write(f"Type: {type}\n")
-            f.write("\n--- Prompt ---\n")
+            f.write("\n--- User Prompt ---\n")  # Added user prompt section
             f.write(prompt)
             f.write("\n\n--- Response ---\n")
             if isinstance(response, (dict, list)):
