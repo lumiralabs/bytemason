@@ -19,26 +19,31 @@ ByteMason is an intelligent development tool that transforms natural language de
 
 We will be launching bytemason on pip soon as a package, for now you can use the repo.
 
+Install `ByteMason`
 ```bash
-# Install ByteMason
 git clone https://github.com/lumiralabs/bytemason
+```
 
-# Create a .env file in root
+Create a `.env` file in root and add the following keys
+```bash
 ANTHROPIC_API_KEY=your_key
 OPENAI_API_KEY=your_key
+```
 
-# Create a virtual environment and activate it
+Create a virtual environment and download all the dependencies
+```bash
+pip install uv # If not installed
 uv venv
-source .venv/bin/activate
-
-# Run this to download all the dependencies
+source .venv/bin/activate # activate the environment
 uv pip install -e .
+```
 
-# Create and generate your app
+Create and generate your app
+```bash
 mason new <app-name>
 cd <app-name>
 mason plan <prompt>
-mason db setup ./spec/specification.json
+mason db setup ./spec/specification.json 
 mason db push
 mason code ./spec/specification.json
 npm run dev
@@ -121,7 +126,8 @@ source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 pip install -e .
 
 # Set environment variables
-cp .env.example .env
+touch .env # on Windows: New-Item .env
+
 # Add your API keys to .env
 ```
 
