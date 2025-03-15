@@ -102,7 +102,7 @@ class ProjectBuilder:
             {"role": "user", "content": user_input},
         ],
                 response_format=Intent,
-                model=os.getenv("ProjectBuilderModel"),
+                model=os.getenv("PROJECT_BUILDER_MODEL"),
             )
             
             # Log the AI response
@@ -144,7 +144,7 @@ class ProjectBuilder:
     #             {"role": "user", "content": f"Enhance this feature: {feature}"},
     #         ],
     #         response_format=Intent,
-    #         model=os.getenv("CodeAgentModel"),
+    #         model=os.getenv("CODE_AGENT_MODEL"),
     #     )
 
     #     return feature
@@ -330,7 +330,7 @@ class ProjectBuilder:
         },
     ],
     response_format=ProjectSpec,
-    model=os.getenv("ProjectBuilderModel")
+    model=os.getenv("PROJECT_BUILDER_MODEL")
 )
 
             # Log the AI prompt and response
@@ -698,7 +698,7 @@ class CodeAgent:
                         {"role": "user", "content": prompt}
                     ],
                     "response_format": GeneratedCode,
-                    "model": os.getenv("CodeAgentModel")
+                    "model": os.getenv("CODE_AGENT_MODEL")
                 }
             )
             
@@ -842,7 +842,7 @@ class CodeAgent:
                         {"role": "user", "content": prompt}
                     ],
                     "response_format": GeneratedCode,
-                    "model": os.getenv("CodeAgentModel")
+                    "model": os.getenv("CODE_AGENT_MODEL")
                 }
             )
             
@@ -950,7 +950,7 @@ class CodeAgent:
                         {"role": "user", "content": prompt}
                     ],
                     "response_format": GeneratedCode,
-                    "model": os.getenv("CodeAgentModel"),
+                    "model": os.getenv("CODE_AGENT_MODEL"),
                 }
             )
             
@@ -1082,7 +1082,7 @@ class CodeAgent:
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    "model": os.getenv("CodeAgentModel"),
+                    "model": os.getenv("CODE_AGENT_MODEL"),
                     "response_format": BuildErrorReport,
                 }
             )
@@ -1144,7 +1144,7 @@ class SupabaseSetupAgent:
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}",
                     },
                 ],
-                model=os.getenv("SupabaseAgentModel"),
+                model=os.getenv("SUPABASE_AGENT_MODEL"),
             )
             return migrations
         except Exception as e:

@@ -24,10 +24,24 @@ Install `ByteMason`
 git clone https://github.com/lumiralabs/bytemason
 ```
 
-Create a `.env` file in root and add the following keys
+Create a `.env` file in root and add the following keys and model informations.
+
 ```bash
+cp .env.example .env
+```
+
+```bash
+# .env file
+
+# API keys
 ANTHROPIC_API_KEY=your_key
 OPENAI_API_KEY=your_key
+
+# Default models (change them according to your requirements)
+PROJECT_BUILDER_MODEL=anthropic/claude-3-5-sonnet-20241022
+CODE_AGENT_MODEL=anthropic/claude-3-5-sonnet-20241022
+SUPABASE_AGENT_MODEL=anthropic/claude-3-5-sonnet-20241022
+REPAIR_AGENT_MODEL=gpt-4o
 ```
 
 Create a virtual environment and download all the dependencies
@@ -126,9 +140,9 @@ source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 pip install -e .
 
 # Set environment variables
-touch .env # on Windows: New-Item .env
+cp .env.example .env
 
-# Add your API keys to .env
+# Add your API keys and model informations to the .env
 ```
 
 ## Best Practices

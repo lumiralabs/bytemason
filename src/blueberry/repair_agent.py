@@ -80,7 +80,7 @@ class RepairAgent:
                     {"role": "user", "content": prompt}
                 ],
                 # model="anthropic/claude-3-5-sonnet-20241022",
-                model = os.getenv("RepairAgentModel"),
+                model = os.getenv("REPAIR_AGENT_MODEL"),
                 response_format=BuildErrorReport
             )
             
@@ -271,7 +271,7 @@ class RepairAgent:
             response = await lumos.call_ai_async(
                 messages=messages,
                 # model="anthropic/claude-3-5-sonnet-20241022",
-                  model = os.getenv("RepairAgentModel"),
+                  model = os.getenv("REPAIR_AGENT_MODEL"),
                 response_format=AgentResponse
             )
             
@@ -450,7 +450,7 @@ class RepairAgent:
                     {"role": "user", "content": prompt}
                 ],
                 # model="anthropic/claude-3-5-sonnet-20241022"
-                  model = os.getenv("RepairAgentModel"),
+                  model = os.getenv("REPAIR_AGENT_MODEL"),
             )
             
             # Log AI prompt and response
