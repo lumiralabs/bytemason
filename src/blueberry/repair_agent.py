@@ -16,6 +16,10 @@ import re
 import json
 import asyncio
 import os
+from dotenv import load_dotenv
+
+# Loading the custom env vars
+load_dotenv()
 
 class RepairAgent:
     def __init__(self, project_path: str):
@@ -76,7 +80,7 @@ class RepairAgent:
                     {"role": "user", "content": prompt}
                 ],
                 # model="anthropic/claude-3-5-sonnet-20241022",
-                model = 'gpt-4o',
+                model = os.getenv("RepairAgentModel"),
                 response_format=BuildErrorReport
             )
             
@@ -267,7 +271,7 @@ class RepairAgent:
             response = await lumos.call_ai_async(
                 messages=messages,
                 # model="anthropic/claude-3-5-sonnet-20241022",
-                  model = 'gpt-4o',
+                  model = os.getenv("RepairAgentModel"),
                 response_format=AgentResponse
             )
             
@@ -446,7 +450,7 @@ class RepairAgent:
                     {"role": "user", "content": prompt}
                 ],
                 # model="anthropic/claude-3-5-sonnet-20241022"
-                  model = 'gpt-4o',
+                  model = os.getenv("RepairAgentModel"),
             )
             
             # Log AI prompt and response

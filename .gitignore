@@ -15,6 +15,7 @@ demo/
 node_modules/
 .next/
 .env*
+!.env.example
 *.lockb
 
 .DS_Store
