@@ -18,16 +18,26 @@ pip install -e .
 
 # Set up environment variables
 cp .env.example .env
+
+# Add API key and model informations
 ```
 
 ## Environment Setup
 
-ByteMason needs just two API keys to work:
+ByteMason needs just two API keys and four models to work:
 
-```env
-# .env
-ANTHROPIC_API_KEY=your_anthropic_key
-OPENAI_API_KEY=your_openai_key
+```bash
+# .env file
+
+# API keys
+ANTHROPIC_API_KEY=your_key
+OPENAI_API_KEY=your_key
+
+# Default models (available in .env.example) 
+PROJECT_BUILDER_MODEL=anthropic/claude-3-5-sonnet-20241022
+CODE_AGENT_MODEL=anthropic/claude-3-5-sonnet-20241022
+SUPABASE_AGENT_MODEL=anthropic/claude-3-5-sonnet-20241022
+REPAIR_AGENT_MODEL=gpt-4o
 ```
 
 These keys power the AI agents that generate and repair code.
@@ -45,7 +55,7 @@ bytemason/
 │       └── prompts/        # Core prompts for AI
 ├── tests/                  # Test suite
 ├── examples/               # Example applications
-└── pyproject.toml         # Project configuration
+└── pyproject.toml          # Project configuration
 ```
 
 ### Key Components
@@ -140,19 +150,19 @@ When you create a new project, ByteMason generates this structure:
 
 ```
 your-app/
-├── app/                    # Next.js 14 App Router
+├── app/                   # Next.js 14 App Router
 │   ├── page.tsx           # Home page
 │   ├── layout.tsx         # Root layout
 │   ├── auth/              # Authentication pages
 │   └── api/               # API routes
 ├── components/
-│   ├── ui/               # shadcn/ui components
-│   └── features/         # Feature components
+│   ├── ui/                # shadcn/ui components
+│   └── features/          # Feature components
 ├── lib/
-│   ├── utils.ts          # Utility functions
-│   ├── api/              # API functions
-├── public/               # Static assets
-└── types/                # TypeScript types
+│   ├── utils.ts           # Utility functions
+│   ├── api/               # API functions
+├── public/                # Static assets
+└── types/                 # TypeScript types
 ```
 
 ## Development Workflow
@@ -165,6 +175,7 @@ your-app/
 
    # Try your changes
    mason new test
+   cd test
    mason plan "Build a test app"
    ```
 

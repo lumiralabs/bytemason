@@ -1,30 +1,40 @@
 # ByteMason CLI Reference
 
-Complete reference for all ByteMason CLI commands.
+## Introduction
+
+This reference provides a complete list of ByteMason CLI commands, categorized for ease of use. ByteMason automates full-stack application development, database management, and maintenance tasks using AI.
+
+---
 
 ## Core Commands
 
 ### `mason new`
 
-Creates a new ByteMason project, it clones the boilerplate that have foundational logic setup.
+Creates a new ByteMason project by cloning a boilerplate with foundational logic already set up.
 
 ```bash
 mason new <project-name>
 ```
 
+> **Note**: From here all the following commands must be run inside the created project directory.
+
 ### `mason plan`
 
-Generates a specification from your prompt.
+Uses AI to analyze your prompt and create a detailed project specification.
 
 ```bash
-mason plan <prompt>
+mason plan <prompt> # Must be run in the created project root directory
 ```
+
+> This will create a `specifications.json` file in `spec` directory containing all the instructions and project structures needed to build the project.
+
+---
 
 ## Database Commands
 
 ### `mason db setup`
 
-Configures Supabase connection and generates migrations. This takes in your Supabase key credentials for migrations.
+Configures Supabase and generates database migrations. You will be required to enter your Supabase credentials.
 
 ```bash
 mason db setup <spec-path>
@@ -32,25 +42,31 @@ mason db setup <spec-path>
 
 ### `mason db push`
 
-Pushes generated migrations to Supabase.
+Applies the generated database migrations to Supabase.
 
 ```bash
 mason db push
 ```
 
+---
+
+## Code Generation Commands
+
 ### `mason code`
 
-Generates application code from specification.
+Creates frontend and backend code based on the specifications in `spec/specifications.json` file.
 
 ```bash
 mason code <spec-path>
 ```
 
+---
+
 ## Maintenance Commands
 
 ### `mason repair`
 
-Fixes build errors automatically. This runs automatically after `mason code` but if the errors still persist it can be executed manually too.
+Automatically detects and fixes compilation errors. This command runs automatically after `mason code`, but you can run it manually if issues persist.
 
 ```bash
 mason repair
