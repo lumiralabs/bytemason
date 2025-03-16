@@ -197,13 +197,13 @@ The `mason repair` command:
 ```
 your-app/
 ├── app/                    # Next.js 14 App Router
-│   ├── page.tsx           # Home page
-│   ├── todos/             # Todo features
-│   └── api/               # API endpoints
-├── components/            # UI components
-├── lib/                   # Shared code
-│   ├── api/              # API functions
-└── public/               # Static files
+│   ├── page.tsx            # Home page
+│   ├── todos/              # Todo features
+│   └── api/                # API endpoints
+├── components/             # UI components
+├── lib/                    # Shared code
+│   ├── api/                # API functions
+└── public/                 # Static files
 ```
 
 ### 2. Technology Stack
@@ -244,24 +244,22 @@ your-app/
    ```
 
 2. **Generation database schemas and migrations**
-
    ```bash
    mason db setup ./spec/specification.json    # generate schemas and migrations
    mason db push                               # push the migrations to DB
    ```
 
 3. **Generate code**
-   mason code ./spec/specification.json
+    ```bash
+    mason code ./spec/specification.json
+    ```
 
-   # Fix any issues (runs automatically for the first time)
-
+4. **Fix any issues** (runs automatically for the first time)
+   ```bash
    mason repair
-
    ```
 
-   ```
-
-4. **Run the app**
+5. **Run the app**
    ```bash
    npm i && npm run dev
    ```

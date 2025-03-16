@@ -24,6 +24,10 @@ from rich.progress import SpinnerColumn, TextColumn
 import asyncio
 from fnmatch import fnmatch
 from blueberry.repair_agent import RepairAgent
+from dotenv import load_dotenv
+
+# Loading the custom env vars
+load_dotenv()
 
 
 class ProjectBuilder:
@@ -98,7 +102,7 @@ class ProjectBuilder:
             {"role": "user", "content": user_input},
         ],
                 response_format=Intent,
-                model="anthropic/claude-3-5-sonnet-20241022",
+                model=os.getenv("PROJECT_BUILDER_MODEL"),
             )
             
             # Log the AI response
@@ -140,7 +144,7 @@ class ProjectBuilder:
     #             {"role": "user", "content": f"Enhance this feature: {feature}"},
     #         ],
     #         response_format=Intent,
-    #         model="anthropic/claude-3-5-sonnet-20241022",
+    #         model=os.getenv("CODE_AGENT_MODEL"),
     #     )
 
     #     return feature
@@ -326,7 +330,7 @@ class ProjectBuilder:
         },
     ],
     response_format=ProjectSpec,
-    model="anthropic/claude-3-5-sonnet-20241022"
+    model=os.getenv("PROJECT_BUILDER_MODEL")
 )
 
             # Log the AI prompt and response
@@ -694,7 +698,7 @@ class CodeAgent:
                         {"role": "user", "content": prompt}
                     ],
                     "response_format": GeneratedCode,
-                    "model": "anthropic/claude-3-5-sonnet-20241022"
+                    "model": os.getenv("CODE_AGENT_MODEL")
                 }
             )
             
@@ -838,7 +842,7 @@ class CodeAgent:
                         {"role": "user", "content": prompt}
                     ],
                     "response_format": GeneratedCode,
-                    "model": "anthropic/claude-3-5-sonnet-20241022"
+                    "model": os.getenv("CODE_AGENT_MODEL")
                 }
             )
             
@@ -946,7 +950,7 @@ class CodeAgent:
                         {"role": "user", "content": prompt}
                     ],
                     "response_format": GeneratedCode,
-                    "model": "anthropic/claude-3-5-sonnet-20241022"
+                    "model": os.getenv("CODE_AGENT_MODEL"),
                 }
             )
             
@@ -1078,7 +1082,7 @@ class CodeAgent:
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    "model": "anthropic/claude-3-5-sonnet-20241022",
+                    "model": os.getenv("CODE_AGENT_MODEL"),
                     "response_format": BuildErrorReport,
                 }
             )
@@ -1140,7 +1144,7 @@ class SupabaseSetupAgent:
                         "content": f"Generate pgsql migration for: {json.dumps(self.spec.model_dump(), indent=2)}",
                     },
                 ],
-                model="anthropic/claude-3-5-sonnet-20241022",
+                model=os.getenv("SUPABASE_AGENT_MODEL"),
             )
             return migrations
         except Exception as e:
