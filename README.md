@@ -6,6 +6,8 @@ Read the docs [here](https://lumiralabs.github.io/blueberry/)
 
 ## Installation
 
+Requires Python 3.12+.
+
 To install blueberry locally for development:
 
 ```bash
